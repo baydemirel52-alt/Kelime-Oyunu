@@ -1,4 +1,4 @@
-package com.selim.kelimeoyunu // Kendi paket adınla değiştir kanka
+package com.selim.kelimeoyunu
 
 import android.content.Context
 import android.media.AudioAttributes
@@ -56,7 +56,6 @@ import kotlin.random.Random
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Çentikli (Notch) ve delikli ekranlara tam uyum sağlar
         enableEdgeToEdge()
         setContent {
             MaterialTheme {
@@ -76,7 +75,6 @@ class ProceduralSoundEngine {
     var musicEnabled = true
     var isAppInForeground = true
 
-    // Harf seçerken yükselen nota frekansları (Do, Re, Mi, Fa, Sol, La, Si, İnce Do)
     private val swipeNotes = doubleArrayOf(523.25, 587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50)
 
     fun playClick() {
@@ -126,7 +124,6 @@ class ProceduralSoundEngine {
         musicJob?.cancel()
         if (!musicEnabled || !isAppInForeground) return
         musicJob = scope.launch {
-            // Sakin, telifsiz pentatonik ambiyans melodisi
             val melody = doubleArrayOf(261.63, 293.66, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66)
             var idx = 0
             while (isActive && musicEnabled && isAppInForeground) {
@@ -148,7 +145,6 @@ class ProceduralSoundEngine {
             val samples = ShortArray(numSamples)
             for (i in 0 until numSamples) {
                 val angle = 2.0 * PI * i / (sampleRate / freqHz)
-                // Yumuşak giriş/çıkış zarfı (tık sesi yapmaması için)
                 val envelope = when {
                     i < numSamples * 0.1 -> i / (numSamples * 0.1)
                     i > numSamples * 0.7 -> (numSamples - i) / (numSamples * 0.3)
@@ -184,7 +180,7 @@ class ProceduralSoundEngine {
 }
 
 // ==========================================
-// 2. DİL, TARİHİ BİLGİLER, LİG & KELİME HAVUZU
+// 2. DİL, TARİHİ BİLGİLER & LİG SİSTEMİ
 // ==========================================
 enum class Lang(val code: String, val flag: String, val label: String) {
     TR("tr", "🇹🇷", "TR"),
@@ -228,60 +224,141 @@ fun getLeagueForLevel(level: Int): LeagueInfo {
     }
 }
 
-data class WordPack(val letters: String, val words: List<String>)
+// ==========================================
+// 3. 300 BENZERSİZ SEVİYE & BÜYÜK SÖZLÜK MOTORU
+// ==========================================
 
-val TR_WORD_PACKS = listOf(
-    // Seviye 1: 5 saniyelik kolay tanıtım bölümü
-    WordPack("BAL", listOf("BAL", "AL", "AB")),
-    // Kolay (3-4 Harf)
-    WordPack("KALE", listOf("KALE", "ELKA", "KELA", "KAL", "ELA", "LAK", "EK", "AL", "EL")),
-    WordPack("MASA", listOf("MASA", "ASMA", "SAMA", "AMA", "ASA", "SAM", "AS", "AM")),
-    WordPack("KAYA", listOf("KAYA", "AYAK", "YAKA", "KAY", "AYA", "YAK", "AK", "AY")),
-    WordPack("SIRA", listOf("SIRA", "ASIR", "SARI", "SIR", "ARI", "ASI", "AS", "IR")),
-    WordPack(" KAPI".trim(), listOf("KAPI", "PAKI", "KAP", "PAK", "AKI", "AK", "İP")),
-    WordPack("DERT", listOf("DERT", "TER", "RET", "DAR", "ET", "ER")),
-    WordPack("YURT", listOf("YURT", "TUR", "YUT", "TUY", "UR", "UT")),
-    WordPack("RENK", listOf("RENK", "KEN", "KER", "ERK", "EK", "ER", "EN")),
-    WordPack("DOST", listOf("DOST", "SOD", "TOS", "OT", "OD")),
-    // Orta (5 Harf)
-    WordPack("KALEM", listOf("KALEM", "KEMAL", "EMLAK", "KALE", "ELMA", "ALEM", "KAME", "KAL", "KEM", "ELA", "MAL", "LAK")),
-    WordPack("KİTAP", listOf("KİTAP", "TAKİP", "PATİK", "KATİ", "PAKİ", "KAPI", "KAP", "TAK", "TİP", "KİT", "PAK", "ait".uppercase())),
-    WordPack("DENİZ", listOf("DENİZ", "ZİNDE", "DİZE", "EDİN", "İZEN", "DİN", "DİZ", "ZEN", "İDE", "İZ", "İN")),
-    WordPack("TARİH", listOf("TARİH", "TAHİR", "İHTAR", "HART", "AHİR", "TAR", "HAT", "HAR", "AİT", "AH", "AT")),
-    WordPack("SEVGİ", listOf("SEVGİ", "VERGİ", "EVGİ", "SEVİ", "SEV", "KES", "GİV", "EV", "ES", "İS")),
-    WordPack("BAHAR", listOf("BAHAR", "HARAB", "ARAB", "HARA", "BARA", "BAR", "HAR", "ABA", "ARA", "AH", "AB")),
-    WordPack("ÇİÇEK", listOf("ÇİÇEK", "KEÇİ", "ÇEKİ", "ÇEK", "KEÇ", "ÇİÇ", "EK", "İÇ")),
-    WordPack("GÜNEŞ", listOf("GÜNEŞ", "ŞEN", "GÜN", "GEN", "ÜŞE", "NE", "EŞ", "ÜN")),
-    WordPack("YILDIZ", listOf("YILDIZ", "YILI", "DILI", "YIL", "DIL", "ZIT", "DIZ", "İZ")),
-    WordPack("ORMAN", listOf("ORMAN", "ROMAN", "ONAR", "NORM", "ORAN", "MOR", "NAR", "NAM", "OMA", "AN", "ON")),
-    // Zor (6-7 Harf)
-    WordPack("KARTAL", listOf("KARTAL", "TARLAK", "KARAT", "TARLA", "KART", "KARA", "TAKA", "ARKA", "KALA", "KAR", "KAT", "TAK", "TAL", "ARA")),
-    WordPack("MİMARİ", listOf("MİMARİ", "MİMAR", "İMAM", "MİRİ", "RAMİ", "MİR", "İMA", "MİM", "İRİ", "Mİ")),
-    WordPack("EFSANE", listOf("EFSANE", "NEFES", "ESNAF", "SENE", "ENSE", "SEFA", "FENA", "FEN", "SEN", "SAN", "FAS", "AN", "AS")),
-    WordPack("DESTAN", listOf("DESTAN", "SANET", "SEDA", "DANS", "SENA", "ESNA", "TANE", "STEN", "NET", "SEN", "TAN", "TAS", "DAL")),
-    WordPack("ZAFER", listOf("ZAFER", "FERAZ", "FARE", "FEZA", "ARZ", "FAR", "ZAR", "FER", "ZER", "AZ", "ER")),
-    WordPack("KAHRAMAN", listOf("KAHRAMAN", "KARAMAN", "HARMAN", "MAKARA", "ANKARA", "KARMA", "MARKA", "KARA", "HARA", "KAMA", "MANA", "KAYA")),
-    WordPack("BAŞKENT", listOf("BAŞKENT", "Şebek".uppercase(), "BANKET", "BAŞAK", "KENAT", "KENT", "BANK", "TANE", "BAŞ", "BEŞ", "KAŞ", "TAŞ", "KAN", "KAT"))
-)
+// Her seviye (1..300) doğrudan kendi sırasındaki (level - 1) ana kelimeyi alır; asla aynı çark tekrar etmez!
+val TR_300_BASE_WORDS: List<String> = """
+BAL KALE MASA KAYA SIRA KAPI YURT RENK DOST ARKA
+ELMA KARA SARI TASA KASA YARA DANA NARA KEDI KUZU
+KURT KART MERT DERT SERT TART MART PARK FARK ÇARK
+ŞARK BANT RANT KAMP RİSK DİSK KASK MASK ORAN ONAR
+ASİL AYNA IRAK KOLA ROTA ORTA AORT ADIL ACİL AÇIK
+ADIM AKIL AKIM AKIN ALAN ALIM ALIN AMCA ANIT ANLA
+ARAC ARAZ ARKA ARMA ARSA ARTI ASMA ATIK ATIL ATIM
+ATKI AVCI AYAK AYAR AYAZ AYIN AYNA AZAP AZAR AZIM
+BACA BAKI BANT BARI BATI BAYA BAZI BELA BERE BESI
+BİNA BİRA BÖCE BÜRO CABA CAMİ CANI CARİ CEZA CİLA
+ÇABA ÇAKI ÇALI ÇATI ÇARE Çene ÇEŞNİ ÇİLE DAHI DALI
+DAMA DARI DAVA DAYI DELİ DERİ DEVE DİZE DOKU DOLU
+DRAM DUAH DURU EBRU ECEL EDİP EĞİM EĞRİ EKİM EKİN
+EKİP EKŞİ ELEK EMEK EMİN EMİR ENİK ENLİ ERİK ERİL
+ESER ESİN ESKİ EŞEK EŞİK ETEK ETİK ETKİ EVET EVLİ
+EZGİ EZİK FAİL FARE FARK FENA FERİ FİDE FİLE FİLM
+FİRE FİŞE FOYA FUAR GAGA GAHI GANI GAYE GAZİ GEMİ
+GENÇ GERİ GEZİ GIDA GİŞE GÖCE GÖLÜ GÖNÜL GÖZÜ GRUP
+GÜCÜ GÜLÜ GÜMÜŞ GÜNÜ GÜREŞ HABER HACİM HADİS HAFİF HAKİM
+HALI HALK HANE HANI HARA HARE HASA HATA HAVA HAVLU
+KADEM KALEM KİTAP DENİZ TARİH SEVGİ BAHAR ÇİÇEK GÜNEŞ ORMAN
+ASLAN MASAL SARAY KAYIK YATAK TABAK KABAK SOKAK LİMAN ZAMAN
+SAMAN KEMİK DEMİR ŞEHİR NEHİR ZEHİR FİKİR ŞÜKÜR BAKIR ÇAKIR
+SABIR SATIR KATIR ÇADIR KADIN YARIN KARIN FIRIN BURUN TORUN
+SORUN BOYUN KOYUN SABUN YOSUN KAVUN DAVUL BAVUL KABUL KURAL
+KURAK DURAK ÇIRAK MERAK Sıcak TABAN TAVAN KAVAN KAZAN SAZAN
+YAZAR PAZAR HAZAR KARAR ZARAR DAMAR ÇINAR PINAR KENAR FENER
+KEMER SEMER BİBER HABER ŞEKER DEĞER EĞERLİ TEKERLEK KADER KEDER
+SEFER ZAFER NEFES KAFES HEVES ADRES TERAS MAKAS TAKAS KAVAS
+SAVAŞ YAVAŞ TIRAŞ KUMAŞ YAMAÇ AĞAÇLAR ÇEKİÇ PİRİNÇ SEVİNÇBİLİNÇ
+GÜVENÇ İNANÇ KAZANÇ KIRAÇ SÜREÇ GÜNEŞLİ BARIŞ YARIŞ KARIŞ ALKIŞ
+BAKIŞ YAKIŞ ÇIKIŞ NAKIŞ SATIŞ YATIŞ KAÇIŞ DİKİŞ GİRİŞ Çekiliş
+VERİŞ GELİŞ BİLİŞ GÖRÜŞ DÖNÜŞ GÜLÜŞ ÖPÜŞME DÖVÜŞ SÖZLÜK GÖZLÜK
+KÖMÜR ÖMÜRLÜ DEMİRCİ ÇİFTÇİ SÜTÇÜ BALIKÇI EKMEKÇİ SIMİTÇİ BOZACI KAYMAK
+TOPRAK YAPRAK BAYRAK KAYNAK BARDAK PARMAK TARMAK SALKIM YARDIM KAVRUK
+SAVRUK KUVVET DEVLET SERVET ŞEFKAT DİKKAT SOHBET GURBET HASRET KISMET
+HİZMET HİKMET ZAHMET RAHMET MERKEZ HERKES MİMARİ EFSANE DESTAN KARTAL
+KORSAN KALKAN YORGAN HAYVAN MEYDAN ZİNDAN CÜZDAN FİNCAN MERCAN DESTEK
+GÖMLEK ÇELENK BÖBREK ŞİMŞEK LEYLEK KELEBEK GELENEK SEÇENEK YETENEK TENCERE
+PENCERE MANZARA FABRİKA TEHLİKE BİLMECE ÇEKMECE KARINCA PALAMUT OKYANUS BAŞKENT
+""".trimIndent().split(Regex("\\s+")).map { it.uppercase(Locale("tr", "TR")) }.distinct()
 
-val EN_WORD_PACKS = listOf(
-    WordPack("CAT", listOf("CAT", "ACT", "AT")),
-    WordPack("STAR", listOf("STAR", "RATS", "ARTS", "TARS", "ART", "RAT", "TAR", "SAT", "AT", "AS")),
-    WordPack("TIME", listOf("TIME", "ITEM", "EMIT", "MITE", "TIE", "MET", "IT", "ME")),
-    WordPack("WORD", listOf("WORD", "ROW", "ROD", "DOW", "DO", "OR")),
-    WordPack("GOLD", listOf("GOLD", "GOD", "DOG", "LOG", "OLD", "GO", "DO")),
-    WordPack("STONE", listOf("STONE", "NOTES", "TONES", "ONSET", "NOTE", "TONE", "SENT", "NEST", "NOSE", "ONE", "SON", "NET", "SET", "TEN")),
-    WordPack("WATER", listOf("WATER", "RATE", "TEAR", "WEAR", "WARE", "WAR", "ART", "EAR", "EAT", "TEA", "RAW")),
-    WordPack("HEART", listOf("HEART", "EARTH", "HATER", "HEAR", "HEAT", "HATE", "RATE", "TEAR", "ART", "EAR", "EAT", "HAT", "TEA")),
-    WordPack("SMART", listOf("SMART", "MARTS", "STAR", "MARS", "ARMS", "ARTS", "RATS", "MATS", "ART", "ARM", "MAR", "MAT", "RAM", "RAT", "SAT")),
-    WordPack("CROWN", listOf("CROWN", "CORN", "CROW", "WORN", "COW", "ROW", "NOW", "OWN", "WON")),
-    WordPack("PLANET", listOf("PLANET", "PLANT", "PLATE", "PANEL", "PLANE", "LEANT", "PETAL", "PLAN", "LATE", "TALE", "PALE", "LEAP", "PEAL", "NEAT", "TAPE")),
-    WordPack("CASTLE", listOf("CASTLE", "CLEATS", "SCALE", "SLATE", "STALE", "TALES", "LEAST", "STEAL", "CAST", "LATE", "CATS", "EAST", "SEAT", "SALE", "SEAL")),
-    WordPack("LEGEND", listOf("LEGEND", "GLEED", "LEDGE", "GENE", "NEED", "EDGE", "LEND", "GLEE", "END", "DEN", "LEG", "GEL"))
-)
+// Zengin Türkçe Alt Kelime Sözlüğü (Çark harflerinden üretilebilen tüm geçerli kelimeleri yakalar)
+val TR_DICTIONARY: Set<String> = (TR_300_BASE_WORDS + """
+AB AC AÇ AD AF AG AH AK AL AM AN AR AS AŞ AT AV AY AZ BA BE BU DA DE EK EL EM EN ER ES EŞ ET EV EY
+İÇ İL İM İN İP İS İŞ İT İZ KA KE Kİ LA LE MA ME Mİ NE OD OF OH OK OL OM ON OT OY ÖÇ ÖD ÖK ÖL ÖN ÖZ
+PA PE Pİ RE SU ŞU TA TE Tİ UÇ UK UL UN UR US UT UY ÜÇ ÜN ÜS ÜZ YA YE YO Zİ
+ABA ABİ ACI AÇI ADA ADI AĞA AĞI AHA AHİ AİT AKA AKI ALA ALİ AMA ANA ANI ANİ ARA ARI ARİ ARK ARP ART ARZ
+ASA ASİ AŞI AŞK ATA ATI AVI AYA AYI AZA AZI BAÇ BAD BAĞ BAK BAL BAN BAR BAS BAŞ BAT BAY BAZ BEJek BEK
+BEL BEN BER BES BEŞ BET BEY BEZ BİN BİR BİT BİZ BOA BOK BOL BOM BOR BOT BOY BOZ BÖL BÜK BÜZ CAM CAN CAR
+CAZ CEM CEP CER CET CİL CİN CİP CİS ÇAB ÇAĞ ÇAK ÇAL ÇAM ÇAN ÇAP ÇAR ÇAT ÇAY ÇEK ÇİL ÇİM ÇİN ÇİP ÇİT
+ÇİZ ÇOK ÇÖL Çöp ÇÖZ DAĞ DAL DAM DAR DAV DAY DAZ DEK DEM DEN DER DES DEV DİK DİL DİN DİP DİR DİS DİŞ DİZ
+DOĞ DOK DOL DON DOR DOY DOZ DÖK DÖL DÖN DÖŞ DUA DUL DUN DUR DUŞ DUT DUY DÜŞ DÜZ EBE ECE EDA EDE EDİ EGE
+EĞE EKİ ELA ELİ EME EMİ ENİ EPE ERKova ERİ EŞİ ETİ EVİ EZA EZE FAN FAR FAS FAŞ FAY FAZ FEK FEN FER FES
+FET FİL FİN FİŞ FİT FON FOR FOY FÖN FUL FUT GAF GAH GAM GAR GAZ GEÇ GEM GEN GER GEZ GIK GİB GİT GİY GİZ
+GOL GÖÇ GÖK GÖL GÖN GÖR GÖZ GÜR GÜÇ GÜL GÜM GÜN GÜR GÜZ HAB HAC HAÇ HAD HAF HAK HAL HAM HAN HAP HAR HAS
+HAT HAV HAY HAZ HEM HEP HER HIR HİS HIZ Hiç HİÇ HOL HOR HOŞ HÖY HÜZ IRA IRK İDE İKİ İLA İLE İLİ İMA İMİ
+İNİ İPİ İRİ İSA İSİ İŞİ İTİ İYİ İZİ Kıç KAÇ KAD KAF KAH KAL KAM KAN KAP KAR KAS KAŞ KAT KAV KAY KAZ KEK
+KEL KEM KEN KER KES KEŞ KET KEZ KIK KIL KIN KIP KIR KIS KIŞ KIT KIY KIZ KİL KİM KİN KİP KİR KİT KOD KOK
+KOL KOM KON KOP KOR KOŞ KOT KOY KOZ KÖK KÖL KÖR KÖS KÖY KÖZ KUL KUM KUN KUP KUR KUS KUŞ KUT KUY KUZ KÜL
+KÜP KÜR KÜS KÜT LAF LAK LAM LAN LAP LAR LAS LAT LAV LAZ LEF LEH LEŞ LİF LİG LİM LİR LÖK LÜK MAÇ MAI MAK
+MAL MAN MAS MAT MAY MAZ MEÇ MEY MİL MİM MİN MİR MİS MİT MOR MUŞ MUT MUZ MÜL NAM NAN NAR NAS NAZ NEM NET
+NEY NİL NİM NİŞ NOD NOM NOT NUR ODA OFİ OHA OJE OKA OKU OLA OLU OMA ONA ONİ ORA ORG ORT OYA OYU ÖBE ÖCÜ
+ÖDE ÖĞE ÖKE ÖLÜ ÖNÜ ÖPÜ ÖRÜ ÖTE ÖTÜ ÖVGÜ ÖYKÜ ÖZÜ PAK PAL PAM PAN PAR PAS PAT PAY PAZ PEÇ PEK PES PET PİL
+PİM PİR PİS PİT POZ PÖF PUL PUN PUS PUT PÜR RAB RAM RAP RAY RAZ RED REN RET REY RİA RİN RİT ROD ROL ROM
+ROT ROZ RUH RUJ RUM RUN RUS RUT SAÇ SAF SAĞ SAH SAK SAL SAM SAN SAP SAR SAS SAT SAV SAY SAZ SEÇ SEK SEL
+SEM SEN SER SES SET SEV SEY SEZ SIĞ SIK SIN SIR SIS SIT SIZ SİL SİM SİN SİR SİS SİT SİZ SOF SOK SOL SOM
+SON SOY SÖZ SUÇ SUL SUN SUR SUS SÜS SÜT ŞAH ŞAK ŞAL ŞAM ŞAN ŞAP ŞAR ŞAT ŞAZ ŞEF ŞEK ŞEM ŞEN ŞER ŞEŞ ŞEY
+Şık ŞIK Şii Şİİ Şip ŞİP Şok ŞOK ŞOR ŞOV ŞUA ŞUH TAB TAÇok TAÇ TAK TAL TAM TAN TAP TAR TAS TAŞ TAT TAV TAY
+TAZ TEF TEK TEL TEM TEN TER TES TEZ TIK TIN TIP TIR TIS TİP TİR TİZ TOK TON TOP TOR TOS TOY TOZ TÖS TUĞ
+TUL TUN TUR TUŞ TUT TUZ TÜL TÜM TÜR TÜY UCA UCU UÇU UFA ULA ULU UMA UMU UNA UNU URA URU USA USU UTA UTU
+UYA UYU UZA UZU ÜÇÜ ÜLÜ ÜMİ ÜNÜ ÜRÜ ÜSÜ ÜTÜ ÜVE ÜZÜ VAH VAK VAL VAN VAR VAS VAY VAZ VEZ VİN VİR VİZ VUR
+YAB YAĞ YAK YAL YAM YAN YAP YAR YAS YAŞ YAT YAV YAY YAZ YEK YEL YEM YEN YER YES YET YEZ YIĞ YIK YIL YIR
+YİV YOĞ YOK YOL YOM YON YOR YOS YOZ YÖN YUF YUH YUM YUN YUR YUT YUV YÜK YÜN YÜZ ZAĞ ZAM ZAN ZAR ZAT ZIT
+ZİL ZİN ZİR ZOR ZÜL ABLA ACEM AÇIK AÇIM AÇIŞ ADAK ADAM ADAP ADAY ADET ADIL ADIM ADLI AFET AĞAÇ AĞDA AĞIL
+AĞIM AĞIR AĞIT AĞIZ AĞRI AHÇI AHIR AHİT AİLE AKAR AKÇA AKÇE AKIL AKIM AKIN AKIŞ AKİT AKLI AKMA AKik AKİS
+AKor AKSU ALAN ALAY ALÇI ALGI ALıç ALIM ALIN ALIŞ ALİL ALİM ALLI ALMA ALTI AMAÇ AMAN AMCA AMEL AMİL AMİN
+AMİR AMME ANCA ANIK ANIT ANIZ ANLA ANMA ANNE ANTI AORT APAK APSE ARAÇ ARAF ARAK ARAP ARAZ ARDA ARDI ARGO
+ARIK ARIŞ ARİF ARKA ARLI ARMA ARPA ARSA ARŞI ARTI ARZU ASAL ASAR ASık ASIL ASIM ASIR ASİL ASİT ASKI ASLA
+ASLI ASMA AŞÇI AŞIK AŞIM AŞير ATAK ATAR ATAŞ ATÇI ATIK ATIL ATIM ATIŞ ATKI ATLI ATMA AVAM AVAZ AVCI AVLU
+AVUÇ AYAK AYAN AYAR AYAZ AYÇA AYET AYIK AYIL AYIN AYIP AYIT AYLA AYLI AYNA AYNI AYOL AYRI AYVA AZAP AZAR
+AZIK AZIŞ AZİL AZİM AZİZ AZMA BACA BACI BADE BAĞI BAKI BAKİ BALA BALE BALO BANA BANK BANT BARA BARI BARK
+BARO BATI BAYA BAYİ BAZA BAZI BEBE BEKA BELA BERE BERİ BESİ BETİ BEZE BİAT BİDE BİNA BİRA BİRİ Bİشİ BİŞİ
+""".trimIndent().split(Regex("\\s+")).map { it.uppercase(Locale("tr", "TR")) }).toSet()
+
+val EN_BASE_WORDS: List<String> = """
+CAT STAR TIME WORD GOLD STONE WATER HEART SMART CROWN
+PLANET CASTLE LEGEND MASTER GARDEN BRIDGE SILVER FOREST DRAGON WONDER
+SPIRIT SHADOW BRIGHT FLOWER WINTER SUMMER SPRING AUTUMN ISLAND DESERT
+OCEAN VALLEY CANYON TEMPLE PALACE MARKET HARBOR VOYAGE ROCKET MAGNET
+""".trimIndent().split(Regex("\\s+"))
+
+val EN_DICTIONARY: Set<String> = (EN_BASE_WORDS + """
+AT AS AN AM IT IN IS IF ON OR TO DO GO NO SO UP US ME WE BE HE BY MY OF
+CAT ACT ART RAT TAR SAT STAR RATS ARTS TARS TIME ITEM EMIT MITE TIE MET
+WORD ROW ROD DOW GOLD GOD DOG LOG OLD STONE NOTES TONES ONSET NOTE TONE
+SENT NEST NOSE ONE SON NET SET TEN WATER RATE TEAR WEAR WARE WAR EAR EAT
+TEA RAW HEART EARTH HATER HEAR HEAT HATE HAT SMART MARTS MARS ARMS MATS
+ARM MAR MAT RAM CROWN CORN CROW WORN COW NOW OWN WON PLANET PLANT PLATE
+PANEL PLANE LEANT PETAL PLAN LATE TALE PALE LEAP PEAL NEAT TAPE CASTLE
+SCALE SLATE STALE TALES LEAST STEAL CAST CATS EAST SEAT SALE SEAL LEGEND
+LEDGE GENE NEED EDGE LEND GLEE END DEN LEG GEL MASTER STREAM TAMERS TEAM
+MEAT MATE TAME STEAM SEAM RATE REST EAST GARDEN DANGER RANGED GRAND GRADE
+DEAR DARE READ NEAR GEAR RAGE RING BRIDGEolerant SILVER LIVERS RIVER LIVE
+EVIL VEIL VILE FOREST FORTS FROST STORE FORTE FORT REST ROSE SORE TORE
+DRAGON GRAND GROAN ORGAN ROAD GONE DONE NODE WONDER DOWNER DROWNED WORD
+DOWN WORN DONE DREW SPIRIT STRIP TRIPS SPIT TRIP TIPS RIPS PITS SHADOW
+SHOWS DASH WASH SODA WADS BRIGHT RIGHT BIRTH GRIT TRIG FLOWER LOWER
+FLOW WOLF LORE ROLE WINTER INTER TWIN WINE RENT TIRE WIRE TERM SUMMER
+MUSE SURE USER RUSE SPRING RINGS GRINS PING RING SING GRIN SPIN PIN
+""".trimIndent().split(Regex("\\s+"))).toSet()
+
+// Verilen çark harfleriyle aday kelimenin yazılıp yazılamayacağını harf sayısına göre kontrol eder
+fun canFormWordFromWheel(wheelLetters: String, candidate: String): Boolean {
+    if (candidate.length < 2 || candidate.length > wheelLetters.length) return false
+    val counts = mutableMapOf<Char, Int>()
+    for (ch in wheelLetters) {
+        counts[ch] = (counts[ch] ?: 0) + 1
+    }
+    for (ch in candidate) {
+        val left = counts[ch] ?: 0
+        if (left <= 0) return false
+        counts[ch] = left - 1
+    }
+    return true
+}
 
 // ==========================================
-// 3. BULMACA TABLOSU (CROSSWORD) ÜRETİCİSİ
+// 4. BULMACA TABLOSU (CROSSWORD) ÜRETİCİSİ
 // ==========================================
 data class PlacedWord(
     val word: String,
@@ -302,38 +379,49 @@ data class LevelPuzzle(
 )
 
 fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
-    val packs = if (lang == Lang.TR) TR_WORD_PACKS else EN_WORD_PACKS
-    val pack = if (level == 1) {
-        packs.first()
-    } else {
-        // Seviye ilerledikçe kolaydan zora doğru paket seçimi
-        val maxIdx = ((level.toFloat() / 300f) * packs.size).toInt().coerceIn(2, packs.size - 1)
-        val minIdx = (maxIdx - 5).coerceAtLeast(1)
-        val rng = Random(level * 997 + lang.ordinal * 31)
-        packs[rng.nextInt(minIdx, maxIdx + 1)]
+    val baseList = if (lang == Lang.TR) TR_300_BASE_WORDS else EN_BASE_WORDS
+    val dict = if (lang == Lang.TR) TR_DICTIONARY else EN_DICTIONARY
+
+    // Her seviye doğrudan kendi sırasındaki (level - 1) ana kelimeyi alır!
+    val baseIndex = (level - 1).coerceAtLeast(0) % baseList.size
+    val mainWord = baseList[baseIndex]
+
+    // Çark harflerinden çıkabilecek tüm geçerli sözlük kelimelerini bul
+    val allValidWords = dict.filter { canFormWordFromWheel(mainWord, it) }
+        .distinct()
+        .sortedWith(compareByDescending<String> { it.length }.thenBy { it })
+
+    val rng = Random(level * 1337 + lang.ordinal * 97)
+
+    // Seviyeye göre tabloya kaç kelime konacağını belirle
+    val targetBoardCount = when {
+        level == 1 -> 2
+        level <= 10 -> 4
+        level <= 50 -> 5
+        else -> 6
     }
 
-    val rng = Random(level * 1337)
-    val sortedWords = pack.words.distinct().sortedByDescending { it.length }
-    val targetCount = when {
-        level == 1 -> 2
-        level < 10 -> 3
-        level < 40 -> 4
-        level < 120 -> 5
-        else -> 6
-    }.coerceAtMost(sortedWords.size)
+    // Önce 3 ve daha fazla harfli kelimeleri tercih et, yetmezse 2 harflileri ekle
+    val threePlus = allValidWords.filter { it != mainWord && it.length >= 3 }.shuffled(rng)
+    val twoLetters = allValidWords.filter { it != mainWord && it.length == 2 }.shuffled(rng)
 
-    val mainWord = sortedWords.first()
-    val candidates = sortedWords.drop(1).shuffled(rng)
     val selectedForBoard = mutableListOf(mainWord)
-    selectedForBoard.addAll(candidates.take(targetCount - 1))
+    for (w in threePlus) {
+        if (selectedForBoard.size < targetBoardCount) selectedForBoard.add(w)
+    }
+    for (w in twoLetters) {
+        if (selectedForBoard.size < targetBoardCount) selectedForBoard.add(w)
+    }
 
-    // Kelimeleri sanal 15x15 tabloya kesiştirerek yerleştir
-    val boardSize = 16
+    // Eğer sözlükten çok az alt kelime çıktıysa ana kelimenin ilk 3 harfini garantili ekle
+    if (selectedForBoard.size < 2 && mainWord.length >= 3) {
+        selectedForBoard.add(mainWord.substring(0, 3))
+    }
+
+    val boardSize = 18
     val grid = Array(boardSize) { CharArray(boardSize) { ' ' } }
     val placed = mutableListOf<PlacedWord>()
 
-    // İlk kelimeyi ortaya yatay koy
     val startRow = boardSize / 2
     val startCol = (boardSize - mainWord.length) / 2
     for (i in mainWord.indices) {
@@ -341,7 +429,6 @@ fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
     }
     placed.add(PlacedWord(mainWord, startRow, startCol, true))
 
-    // Diğer kelimeleri ortak harflerden kesiştirmeyi dene
     var fallbackRow = startRow + 2
     for (w in selectedForBoard.drop(1)) {
         var isPlaced = false
@@ -366,7 +453,6 @@ fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
                 }
             }
         }
-        // Kesişemezse temiz bir alt satıra yatay yerleştir (asla kelime kaybolmaz)
         if (!isPlaced) {
             while (fallbackRow < boardSize - 1 && !canPlaceWord(grid, w, fallbackRow, 2, true)) {
                 fallbackRow++
@@ -381,7 +467,6 @@ fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
         }
     }
 
-    // Sınırları kırp (normalize et) ki ekrana tam ortalansın
     var minR = boardSize
     var maxR = 0
     var minC = boardSize
@@ -402,9 +487,14 @@ fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
     }
 
     val boardWordSet = normalizedPlaced.map { it.word }.toSet()
-    val bonusSet = pack.words.filter { it !in boardWordSet }.toSet()
+    val bonusSet = allValidWords.filter { it !in boardWordSet }.toSet()
 
-    val wheelChars = pack.letters.toList().shuffled(rng)
+    // Çarktaki harfleri karıştır (düz okunmasın)
+    var wheelChars = mainWord.toList().shuffled(rng)
+    if (wheelChars.joinToString("") == mainWord && mainWord.length > 2) {
+        wheelChars = wheelChars.reversed()
+    }
+
     val isTimeAttack = (level % 15 == 0)
     val timeLimit = if (isTimeAttack) (45 + normalizedPlaced.size * 8) else 0
 
@@ -426,7 +516,6 @@ private fun canPlaceWord(grid: Array<CharArray>, word: String, r: Int, c: Int, i
     if (isHoriz && c + word.length >= size - 1) return false
     if (!isHoriz && r + word.length >= size - 1) return false
 
-    // Başlangıç öncesi ve bitiş sonrası boş olmalı
     if (isHoriz) {
         if (grid[r][c - 1] != ' ' || grid[r][c + word.length] != ' ') return false
     } else {
@@ -439,7 +528,6 @@ private fun canPlaceWord(grid: Array<CharArray>, word: String, r: Int, c: Int, i
         val current = grid[nr][nc]
         if (current != ' ' && current != word[i]) return false
         if (current == ' ') {
-            // Yan komşular boş olmalı
             if (isHoriz) {
                 if (grid[nr - 1][nc] != ' ' || grid[nr + 1][nc] != ' ') return false
             } else {
@@ -451,7 +539,7 @@ private fun canPlaceWord(grid: Array<CharArray>, word: String, r: Int, c: Int, i
 }
 
 // ==========================================
-// 4. ANA UYGULAMA VE EKRAN YÖNETİCİSİ
+// 5. ANA UYGULAMA VE EKRAN YÖNETİCİSİ
 // ==========================================
 enum class Screen { MENU, GAME }
 
@@ -461,7 +549,6 @@ fun WordGameApp(onExitApp: () -> Unit) {
     val prefs = remember { context.getSharedPreferences("kelime_efsanesi_prefs", Context.MODE_PRIVATE) }
     val soundEngine = remember { ProceduralSoundEngine() }
 
-    // Telefon dilini otomatik algıla (ilk açılışta)
     val defaultLangCode = remember {
         val sys = Locale.getDefault().language.lowercase()
         if (sys.startsWith("tr")) "tr" else "en"
@@ -483,7 +570,6 @@ fun WordGameApp(onExitApp: () -> Unit) {
     var showHistoryBook by remember { mutableStateOf(false) }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
 
-    // Kayıt yardımcıları
     fun saveState() {
         prefs.edit()
             .putString("lang", lang.code)
@@ -496,7 +582,6 @@ fun WordGameApp(onExitApp: () -> Unit) {
             .apply()
     }
 
-    // Ses motoru senkronizasyonu
     LaunchedEffect(musicEnabled, sfxEnabled) {
         soundEngine.musicEnabled = musicEnabled
         soundEngine.sfxEnabled = sfxEnabled
@@ -504,7 +589,6 @@ fun WordGameApp(onExitApp: () -> Unit) {
         saveState()
     }
 
-    // Samsung Store Kuralı: Ekran kapanınca veya uygulama alta atılınca müziği durdur
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -533,10 +617,8 @@ fun WordGameApp(onExitApp: () -> Unit) {
                 )
             )
     ) {
-        // Arka Plan: Puzzle parçaları ve harfler (Grafik ayarına duyarlı)
         PuzzleWordBackground(highGraphics = highGraphics)
 
-        // Güvenli ekran alanı (Çentik, kamera deliği ve alt barlardan korur)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -618,7 +700,6 @@ fun WordGameApp(onExitApp: () -> Unit) {
                 }
             }
 
-            // Üst Bildirim (Toast/Banner)
             AnimatedVisibility(
                 visible = bannerMessage != null,
                 enter = fadeIn(),
@@ -649,7 +730,6 @@ fun WordGameApp(onExitApp: () -> Unit) {
             }
         }
 
-        // Ayarlar Penceresi
         if (showSettings) {
             SettingsDialog(
                 lang = lang,
@@ -684,7 +764,6 @@ fun WordGameApp(onExitApp: () -> Unit) {
             )
         }
 
-        // Tarih Ansiklopedisi & Lig Penceresi
         if (showHistoryBook) {
             HistoryEncyclopediaDialog(
                 lang = lang,
@@ -699,7 +778,7 @@ fun WordGameApp(onExitApp: () -> Unit) {
 }
 
 // ==========================================
-// 5. PUZZLE & KELİME HARMANLI ARKA PLAN
+// 6. PUZZLE & KELİME HARMANLI ARKA PLAN
 // ==========================================
 @Composable
 fun PuzzleWordBackground(highGraphics: Boolean) {
@@ -723,7 +802,6 @@ fun PuzzleWordBackground(highGraphics: Boolean) {
         val h = size.height
         val tileSize = w / 7f
 
-        // Silik çapraz bulmaca ızgarası ve puzzle kutuları
         for (r in 0..(h / tileSize).toInt()) {
             for (c in 0..7) {
                 if ((r + c) % 3 == 0) {
@@ -739,7 +817,6 @@ fun PuzzleWordBackground(highGraphics: Boolean) {
             }
         }
 
-        // Dekoratif bağlantı çizgileri (kelime ağları)
         val nodes = listOf(
             Offset(w * 0.15f, h * (0.2f + floatOffset * 0.05f)),
             Offset(w * 0.45f, h * (0.12f - floatOffset * 0.03f)),
@@ -764,7 +841,7 @@ fun PuzzleWordBackground(highGraphics: Boolean) {
 }
 
 // ==========================================
-// 6. ANA MENÜ EKRANI
+// 7. ANA MENÜ EKRANI
 // ==========================================
 @Composable
 fun MainMenuScreen(
@@ -787,13 +864,11 @@ fun MainMenuScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // ÜST BAR: Sol üstte ufak Bayraklı Dil Butonu + Sağ üstte Altın ve Lig
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Sol Üst Dil Değiştirme Butonu (Bayrak Logolu)
             Surface(
                 onClick = onToggleLang,
                 shape = RoundedCornerShape(20.dp),
@@ -815,7 +890,6 @@ fun MainMenuScreen(
                 }
             }
 
-            // Sağ Üst Altın Göstergesi
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = Color(0xFF1E293B).copy(alpha = 0.85f),
@@ -837,7 +911,6 @@ fun MainMenuScreen(
             }
         }
 
-        // ORTA BAŞLIK: Puzzle Harf Kutuları ve Lig Kartı
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             val logoLetters = if (lang == Lang.TR) listOf('K', 'E', 'L', 'İ', 'M', 'E') else listOf('W', 'O', 'R', 'D', 'S')
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -877,7 +950,6 @@ fun MainMenuScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Lig Rozeti Kartı (20 seviyede bir değişir)
             Surface(
                 shape = RoundedCornerShape(18.dp),
                 color = Color.White.copy(alpha = 0.08f),
@@ -908,13 +980,11 @@ fun MainMenuScreen(
             }
         }
 
-        // ORTA-ALT ÖZENLİ MENÜ BUTONLARI
         Column(
             modifier = Modifier.fillMaxWidth(0.88f),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. BAŞLA BUTONU
             MenuButton(
                 text = if (lang == Lang.TR) "▶  BAŞLA (SEVİYE $level)" else "▶  PLAY (LEVEL $level)",
                 gradient = listOf(Color(0xFF10B981), Color(0xFF059669)),
@@ -923,7 +993,6 @@ fun MainMenuScreen(
                 onClick = onStartGame
             )
 
-            // 2. GÜNLÜK ÖDÜL & TARİH ANSİKLOPEDİSİ (Yan Yana 2 Ekstra Özellik)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -948,7 +1017,6 @@ fun MainMenuScreen(
                 }
             }
 
-            // 3. AYARLAR BUTONU
             MenuButton(
                 text = if (lang == Lang.TR) "⚙️  AYARLAR" else "⚙️  SETTINGS",
                 gradient = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)),
@@ -957,7 +1025,6 @@ fun MainMenuScreen(
                 onClick = onOpenSettings
             )
 
-            // 4. ÇIKIŞ YAP BUTONU
             MenuButton(
                 text = if (lang == Lang.TR) "🚪  ÇIKIŞ YAP" else "🚪  EXIT GAME",
                 gradient = listOf(Color(0xFFEF4444), Color(0xFFB91C1C)),
@@ -967,9 +1034,8 @@ fun MainMenuScreen(
             )
         }
 
-        // Alt Bilgi
         Text(
-            text = "Galaxy Store Edition • v1.0",
+            text = "Galaxy Store Edition • v1.1 (300 Paket)",
             color = Color.White.copy(alpha = 0.35f),
             fontSize = 11.sp
         )
@@ -1005,7 +1071,7 @@ fun MenuButton(
 }
 
 // ==========================================
-// 7. OYUN İÇİ EKRANI (BULMACA + ÇARK + SÜRE + TARİH)
+// 8. OYUN İÇİ EKRANI
 // ==========================================
 @Composable
 fun GameplayScreen(
@@ -1019,20 +1085,17 @@ fun GameplayScreen(
     onBackToMenu: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    var puzzle by remember(level, lang) { mutableStateOf(generateLevelPuzzle(level, lang)) }
+    val puzzle = remember(level, lang) { generateLevelPuzzle(level, lang) }
     var wheelLetters by remember(puzzle) { mutableStateOf(puzzle.wheelLetters) }
 
-    // Çözülen kelimeler ve ipucuyla açılan hücreler (satır, sütun çifti)
     var solvedWords by remember(puzzle) { mutableStateOf(setOf<String>()) }
     var revealedCells by remember(puzzle) { mutableStateOf(setOf<Pair<Int, Int>>()) }
     var foundBonusWords by remember(puzzle) { mutableStateOf(setOf<String>()) }
     var comboCount by remember(puzzle) { mutableIntStateOf(0) }
 
-    // Çark üzerinde seçili harf indeksleri ve parmak pozisyonu
-    var selectedIndices by remember { mutableStateOf(listOf<Int>()) }
-    var currentTouchPos by remember { mutableStateOf<Offset?>(null) }
+    var selectedIndices by remember(puzzle) { mutableStateOf(listOf<Int>()) }
+    var currentTouchPos by remember(puzzle) { mutableStateOf<Offset?>(null) }
 
-    // 1. Seviye İlk 5 Saniye Rehber Gösterimi
     var showTutorialOverlay by remember(level) { mutableStateOf(level == 1) }
     LaunchedEffect(level) {
         if (level == 1) {
@@ -1041,11 +1104,9 @@ fun GameplayScreen(
         }
     }
 
-    // 15 Seviyede Bir Zamana Karşı Yarış Sayacı
     var remainingSeconds by remember(puzzle) { mutableIntStateOf(puzzle.timeLimitSec) }
     var isTimeOut by remember(puzzle) { mutableStateOf(false) }
 
-    // Bölüm Sonu, Tarihi Bilgi ve Lig Atlama Pencereleri
     var showWinDialog by remember(puzzle) { mutableStateOf(false) }
     var unlockedFact by remember(puzzle) { mutableStateOf<HistoricalFact?>(null) }
     var promotedLeague by remember(puzzle) { mutableStateOf<LeagueInfo?>(null) }
@@ -1064,7 +1125,6 @@ fun GameplayScreen(
         }
     }
 
-    // Kelime kontrol fonksiyonu
     fun submitSwipedWord() {
         if (selectedIndices.isEmpty()) return
         val candidate = selectedIndices.map { wheelLetters[it] }.joinToString("")
@@ -1079,15 +1139,12 @@ fun GameplayScreen(
                 solvedWords = newSolved
                 comboCount++
 
-                // Tüm kelimeler bulunduysa Seviye Bitti!
                 if (newSolved.size >= puzzle.placedWords.size) {
                     soundEngine.playLevelWin()
-                    // Her 10 seviyede bir tarihi bilgi kontrolü
                     if (level % 10 == 0) {
                         unlockedFact = HISTORICAL_FACTS.find { it.levelMilestone == level }
                             ?: HISTORICAL_FACTS[(level / 10 - 1) % HISTORICAL_FACTS.size].copy(levelMilestone = level)
                     }
-                    // Her 20 seviyede bir lig terfisi kontrolü
                     if (level % 20 == 0) {
                         promotedLeague = getLeagueForLevel(level + 1)
                     }
@@ -1102,7 +1159,7 @@ fun GameplayScreen(
                 soundEngine.playBonusWord()
                 foundBonusWords = foundBonusWords + candidate
                 onUpdateGold(gold + 5)
-                feedbackBanner = if (lang == Lang.TR) "✨ Bonus Kelime! +5 Altın" else "✨ Bonus Word! +5 Gold"
+                feedbackBanner = if (lang == Lang.TR) "✨ Bonus Kelime ($candidate)! +5 Altın" else "✨ Bonus Word ($candidate)! +5 Gold"
             }
             candidate.length >= 2 -> {
                 soundEngine.playError()
@@ -1120,7 +1177,6 @@ fun GameplayScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // 1. ÜST BAR (Geri, Seviye/Lig, Zamana Karşı Sayaç, Altın, Ayarlar)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1190,7 +1246,6 @@ fun GameplayScreen(
             }
         }
 
-        // 1. SEVİYE 5 SANİYELİK HIZLI REHBER BANDI
         AnimatedVisibility(visible = showTutorialOverlay) {
             Surface(
                 color = Color(0xFF0284C7),
@@ -1213,7 +1268,6 @@ fun GameplayScreen(
             }
         }
 
-        // 2. BULMACA TABLOSU (Her telefon ekranına otomatik sığan dinamik yapı)
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1225,9 +1279,8 @@ fun GameplayScreen(
             val maxH = maxHeight
             val cellW = (maxW / (puzzle.gridCols + 1).coerceAtLeast(4)).coerceAtMost(48.dp)
             val cellH = (maxH / (puzzle.gridRows + 1).coerceAtLeast(4)).coerceAtMost(48.dp)
-            val cellSize = minOf(cellW, cellH).coerceAtLeast(24.dp)
+            val cellSize = minOf(cellW, cellH).coerceAtLeast(22.dp)
 
-            // Hangi hücrede hangi harf var ve açıldı mı hesapla
             val cellMap = remember(puzzle, solvedWords, revealedCells) {
                 val map = mutableMapOf<Pair<Int, Int>, Pair<Char, Boolean>>()
                 for (pw in puzzle.placedWords) {
@@ -1292,7 +1345,6 @@ fun GameplayScreen(
             }
         }
 
-        // 3. SEÇİLEN HARFLERİN ANLIK ÖNİZLEME KUTUSU & BİLDİRİM
         val currentPreview = selectedIndices.map { wheelLetters[it] }.joinToString("")
         Box(
             modifier = Modifier
@@ -1329,7 +1381,6 @@ fun GameplayScreen(
             }
         }
 
-        // 4. ALT KISIM: SOLDA KARIŞTIR, ORTADA HARF ÇARKI (DESEN ÇİZME), SAĞDA İPUCU
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1337,7 +1388,6 @@ fun GameplayScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Harfleri Karıştır Butonu
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Surface(
                     onClick = {
@@ -1361,7 +1411,6 @@ fun GameplayScreen(
                 )
             }
 
-            // ORTA HARF ÇARKI (Words of Wonders Tarzı Desen Çizme Alanı)
             WordSwipeWheel(
                 letters = wheelLetters,
                 selectedIndices = selectedIndices,
@@ -1377,12 +1426,10 @@ fun GameplayScreen(
                 onDragEnd = { submitSwipedWord() }
             )
 
-            // İpucu (Harf Açma) Butonu (25 Altın)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Surface(
                     onClick = {
                         if (gold >= 25) {
-                            // Henüz açılmamış rastgele bir hücre bul ve aç
                             val unrevealed = mutableListOf<Pair<Int, Int>>()
                             for (pw in puzzle.placedWords) {
                                 if (pw.word !in solvedWords) {
@@ -1425,7 +1472,6 @@ fun GameplayScreen(
         }
     }
 
-    // ZAMANA KARŞI SÜRE BİTTİ PENCERESİ
     if (isTimeOut) {
         Dialog(onDismissRequest = {}) {
             Surface(
@@ -1470,7 +1516,6 @@ fun GameplayScreen(
         }
     }
 
-    // SEVİYE TAMAMLANDI + TARİHİ BİLGİ (10 SEVİYEDE BİR) + LİG ATLAMA (20 SEVİYEDE BİR)
     if (showWinDialog) {
         val baseReward = 20
         val timeBonus = if (puzzle.isTimeAttack) remainingSeconds * 2 else 0
@@ -1507,7 +1552,6 @@ fun GameplayScreen(
                         fontSize = 16.sp
                     )
 
-                    // HER 20 SEVİYEDE BİR LİG TERFİ KUTLAMASI
                     promotedLeague?.let { newLg ->
                         Spacer(modifier = Modifier.height(12.dp))
                         Surface(
@@ -1532,7 +1576,6 @@ fun GameplayScreen(
                         }
                     }
 
-                    // HER 10 SEVİYEDE BİR TARİHİ BİLGİ KARTI (3-4 Satır)
                     unlockedFact?.let { fact ->
                         Spacer(modifier = Modifier.height(14.dp))
                         Surface(
@@ -1579,7 +1622,7 @@ fun GameplayScreen(
 }
 
 // ==========================================
-// 8. HARF ÇARKI (SWIPE WHEEL) BİLEŞENİ
+// 9. HARF ÇARKI (SWIPE WHEEL) BİLEŞENİ
 // ==========================================
 @Composable
 fun WordSwipeWheel(
@@ -1598,7 +1641,6 @@ fun WordSwipeWheel(
     val orbitRadius = wheelPx * 0.34f
     val nodeRadius = wheelPx * 0.115f
 
-    // Harflerin merkez koordinatlarını hesapla
     val letterCenters = remember(letters, wheelPx) {
         letters.indices.map { i ->
             val angle = -PI / 2 + (2 * PI * i / letters.size)
@@ -1646,7 +1688,6 @@ fun WordSwipeWheel(
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Dış Çark Halkası
             drawCircle(
                 color = Color.White.copy(alpha = 0.08f),
                 radius = wheelPx / 2f,
@@ -1659,7 +1700,6 @@ fun WordSwipeWheel(
                 style = Stroke(width = 3f)
             )
 
-            // 1. Seviye İlk 5 Saniye Rehber Çizgisi Animasyonu
             if (showTutorialPulse && letterCenters.size >= 2 && selectedIndices.isEmpty()) {
                 val p1 = letterCenters[0]
                 val p2 = letterCenters[1]
@@ -1676,7 +1716,6 @@ fun WordSwipeWheel(
                 )
             }
 
-            // Seçilen Harfler Arası Desen Çizgisi
             if (selectedIndices.isNotEmpty()) {
                 val path = Path()
                 val firstPt = letterCenters[selectedIndices.first()]
@@ -1695,7 +1734,6 @@ fun WordSwipeWheel(
                 )
             }
 
-            // Harf Daireleri
             letterCenters.forEachIndexed { idx, c ->
                 val isSelected = idx in selectedIndices
                 drawCircle(
@@ -1712,7 +1750,6 @@ fun WordSwipeWheel(
             }
         }
 
-        // Harf Metinlerini Dairelerin Tam Ortasına Yerleştir
         letters.forEachIndexed { idx, ch ->
             val c = letterCenters[idx]
             val offsetX = with(density) { (c.x - wheelPx / 2f).toDp() }
@@ -1729,7 +1766,7 @@ fun WordSwipeWheel(
 }
 
 // ==========================================
-// 9. AYARLAR & TARİH ANSİKLOPEDİSİ PENCERELERİ
+// 10. AYARLAR & TARİH ANSİKLOPEDİSİ PENCERELERİ
 // ==========================================
 @Composable
 fun SettingsDialog(
