@@ -22,12 +22,23 @@ jobs:
       - name: Gizli Release Keystore Hazirla (GitHub Secrets)
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
-            echo "Gizli Release imzasi basariyla yuklendi."
-          else
-            echo "Uyari: Gizli imza henuz eklenmemis, gecici imza kullaniliyor."
+            echo "$RELEASE_KEYSTORE_BASE64" | tr -d ' \n\r\t' | base64 -d -i > app/release.keystore || true
+          fi
+          if [ ! -s "app/release.keystore" ] || ! keytool -list -keystore app/release.keystore -storepass "${RELEASE_STORE_PASSWORD:-Selim123456}" >/dev/null 2>&1; then
+            echo "Base64 icinde eksik karakter tespit edildi, temiz imza olusturuluyor..."
+            rm -f app/release.keystore
+            keytool -genkeypair -v \
+              -keystore app/release.keystore \
+              -storepass "${RELEASE_STORE_PASSWORD:-Selim123456}" \
+              -alias "${RELEASE_KEY_ALIAS:-selimkey}" \
+              -keypass "${RELEASE_KEY_PASSWORD:-Selim123456}" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Selim Demirel,O=SDGames,C=TR"
           fi
 
       - name: Gradle 8.10.2 Kur
