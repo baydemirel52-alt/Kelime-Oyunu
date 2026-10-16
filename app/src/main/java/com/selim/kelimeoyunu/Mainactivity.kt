@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        loadWordLists(applicationContext) // büyük kelime listelerini assets klasöründen yükle
         setContent { MaterialTheme { WordGameApp(onExitApp = { finish() }) } }
     }
 }
@@ -312,10 +313,10 @@ val TR_WORDS_TIER_5 = listOf("KAHRAMAN", "TEKERLEK", "KARANFİL", "ŞAMPİYON", 
 
 val TR_WORDS_ADVANCED = """
 MASAL KAYIK YATAK TABAK KABAK SOKAK LİMAN ZAMAN SAMAN KEMİK DEMİR ŞEHİR NEHİR ZEHİR FİKİR ŞÜKÜR BAKIR ÇAKIR SABIR SATIR
-KATIR ÇADIR KADIN YARIN KARIN FIRIN BURUN TORUN SORUN BOYUN KOYUN SABUN YOSUN KAVUN DAVUL BAVUL KABUL KURAL KURAK DURAK
+KATIR ÇADIR KADIN YARIN KARIN BURUN TORUN SORUN BOYUN KOYUN SABUN YOSUN KAVUN DAVUL BAVUL KABUL KURAL KURAK DURAK
 ÇIRAK MERAK SICAK TABAN TAVAN KAVAN KAZAN SAZAN YAZAR PAZAR HAZAR KARAR ZARAR DAMAR ÇINAR PINAR KENAR FENER KEMER SEMER
 BİBER HABER ŞEKER DEĞER KADER KEDER SEFER ZAFER NEFES KAFES HEVES ADRES TERAS MAKAS TAKAS SAVAŞ YAVAŞ TIRAŞ KUMAŞ YAMAÇ
-ÇEKİÇ BARIŞ YARIŞ KARIŞ ALKIŞ BAKIŞ YAKIŞ ÇIKIŞ NAKIŞ SATIŞ YATIŞ KAÇIŞ DİKİŞ GİRİŞ VERİŞ GELİŞ BİLİŞ GÖRÜŞ DÖNÜŞ GÜLÜŞ
+ÇEKİÇ BARIŞ YARIŞ KARIŞ ALKIŞ BAKIŞ YAKIŞ ÇIKIŞ NAKIŞ SATIŞ YATIŞ KAÇIŞ DİKİŞ GİRİŞ VERİŞ GELİŞ BİLİŞ GÖRÜŞ DÖNÜŞ
 YORGAN HAYVAN ZİNDAN DESTEK GÖMLEK ÇELENK BÖBREK ŞİMŞEK LEYLEK SÖZLÜK GÖZLÜK TOPRAK YAPRAK BAYRAK KAYNAK BARDAK PARMAK SALKIM YARDIM KAVRUK
 SAVRUK KUVVET DEVLET SERVET ŞEFKAT DİKKAT SOHBET GURBET HASRET KISMET HİZMET HİKMET ZAHMET RAHMET MERKEZ HERKES KELEBEK SEÇENEK YETENEK TENCERE
 PENCERE DEMİRCİ BALIKÇI EKMEKÇİ SİMİTÇİ EĞİTİMCİ ÖĞRETMEN MÜHENDİS MİMARLIK CUMHURİYET
@@ -323,7 +324,7 @@ PENCERE DEMİRCİ BALIKÇI EKMEKÇİ SİMİTÇİ EĞİTİMCİ ÖĞRETMEN MÜHEND
 
 val TR_ALL_TIER_WORDS = TR_WORDS_TIER_1 + TR_WORDS_TIER_2 + TR_WORDS_TIER_3 + TR_WORDS_TIER_4 + TR_WORDS_TIER_5 + TR_WORDS_ADVANCED
 
-val TR_DICTIONARY: Set<String> = (TR_ALL_TIER_WORDS + """
+val TR_CURATED_DICTIONARY: Set<String> = (TR_ALL_TIER_WORDS + """
 AB AC AÇ AD AF AG AH AK AL AM AN AR AS AŞ AT AV AY AZ BA BE BU DA DE EK EL EM EN ER ES EŞ ET EV EY
 İÇ İL İM İN İP İS İŞ İT İZ KA KE Kİ LA LE MA ME Mİ NE OD OF OH OK OL OM ON OT OY ÖÇ ÖD ÖK ÖL ÖN ÖZ
 PA PE Pİ RE SU ŞU TA TE Tİ UÇ UK UL UN UR US UT UY ÜÇ ÜN ÜS ÜZ YA YE YO Zİ
@@ -373,7 +374,7 @@ val EN_BASE_WORDS = listOf(
     "CAPTAIN", "KINGDOM", "DIAMOND", "THUNDER", "JOURNEY", "FREEDOM", "CRYSTAL", "FORTUNE", "MYSTERY", "VICTORY"
 )
 
-val EN_DICTIONARY: Set<String> = (EN_BASE_WORDS + """
+val EN_CURATED_DICTIONARY: Set<String> = (EN_BASE_WORDS + """
 AT AS AN AM IT IN IS IF ON OR TO DO GO NO SO UP US ME WE BE HE BY MY OF
 CAT ACT ART RAT TAR SAT STAR RATS ARTS TARS TIME ITEM EMIT MITE TIE MET
 WORD ROW ROD DOW GOLD GOD DOG LOG OLD DARK ARK RAD FIRE IRE FIR WIND WIN
@@ -392,14 +393,56 @@ KINGDOM DOING DINGO MIND KIND DONG DIAMOND DOMAIN MONAD MAIN MIND THUNDER
 HUNTED TURNED UNDER TREND HUNT TURN HURT JOURNEY ENJOY JURY FREED DOME
 """.trimIndent().split(Regex("\\s+"))).toSet()
 
+// ------------------------------------------------------------
+// BÜYÜK KELİME LİSTELERİ (app/src/main/assets/ klasöründeki .txt dosyaları)
+//   *_words.txt  : oyunda KABUL EDİLEN tüm kelimeler
+//   *_common.txt : tahtaya konacak YAYGIN kelimeler (herkesin bildiği)
+// Dosyalar bulunamazsa eski küçük listeler kullanılır, oyun yine çalışır.
+// ------------------------------------------------------------
+var TR_DICTIONARY: Set<String> = TR_CURATED_DICTIONARY
+var TR_COMMON: Set<String> = TR_CURATED_DICTIONARY
+var EN_DICTIONARY: Set<String> = EN_CURATED_DICTIONARY
+var EN_COMMON: Set<String> = EN_CURATED_DICTIONARY
+
+// Bir bölümde en fazla kaç bonus kelime altın verir (listeler büyüdüğü için sınır konuldu)
+const val MAX_REWARDED_BONUS_WORDS = 8
+
+fun readWordFile(context: Context, fileName: String, minLen: Int): Set<String> {
+    return try {
+        context.assets.open(fileName).bufferedReader(Charsets.UTF_8).useLines { lines ->
+            lines.map { it.trim() }.filter { it.length >= minLen }.toHashSet()
+        }
+    } catch (e: Exception) {
+        emptySet()
+    }
+}
+
+fun loadWordLists(context: Context) {
+    val tr = readWordFile(context, "tr_words.txt", 2)
+    if (tr.size > 5000) {
+        TR_DICTIONARY = tr + TR_ALL_TIER_WORDS
+        TR_COMMON = readWordFile(context, "tr_common.txt", 3) + TR_CURATED_DICTIONARY
+    }
+    val en = readWordFile(context, "en_words.txt", 2)
+    if (en.size > 5000) {
+        EN_DICTIONARY = en + EN_BASE_WORDS
+        EN_COMMON = readWordFile(context, "en_common.txt", 3) + EN_CURATED_DICTIONARY
+    }
+}
+
 fun canFormWordFromWheel(wheelLetters: String, candidate: String): Boolean {
     if (candidate.length < 2 || candidate.length > wheelLetters.length) return false
-    val counts = mutableMapOf<Char, Int>()
-    for (ch in wheelLetters) counts[ch] = (counts[ch] ?: 0) + 1
+    val used = BooleanArray(wheelLetters.length)
     for (ch in candidate) {
-        val left = counts[ch] ?: 0
-        if (left <= 0) return false
-        counts[ch] = left - 1
+        var found = false
+        for (i in wheelLetters.indices) {
+            if (!used[i] && wheelLetters[i] == ch) {
+                used[i] = true
+                found = true
+                break
+            }
+        }
+        if (!found) return false
     }
     return true
 }
@@ -438,7 +481,11 @@ fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
     val rng = Random(level * 1337 + lang.ordinal * 97)
     val targetBoardCount = when { level == 1 -> 2; level <= 10 -> 4; level <= 30 -> 5; else -> 6 }
 
-    val subCandidates = allValidWords.filter { it != mainWord && it.length >= 3 }.shuffled(rng).sortedByDescending { it.length }
+    // Tahtaya önce herkesin bildiği yaygın kelimeler konur; yetmezse nadir kelimelerle tamamlanır
+    val commonWords = if (lang == Lang.TR) TR_COMMON else EN_COMMON
+    val subCandidatesAll = allValidWords.filter { it != mainWord && it.length >= 3 }
+    val subCandidates = subCandidatesAll.filter { it in commonWords }.shuffled(rng).sortedByDescending { it.length } +
+        subCandidatesAll.filter { it !in commonWords }.shuffled(rng).sortedByDescending { it.length }
     val twoLetterCandidates = allValidWords.filter { it != mainWord && it.length == 2 }.shuffled(rng)
 
     val selectedForBoard = mutableListOf(mainWord)
@@ -1047,15 +1094,20 @@ fun GameplayScreen(
             candidate in puzzle.bonusWords && candidate !in foundBonusWords -> {
                 foundBonusWords = foundBonusWords + candidate
                 feverProgress = (feverProgress + 0.25f).coerceAtMost(1f)
-                val nextJar = bonusJarCount + 1
-                if (nextJar >= 5) {
-                    soundEngine.playLevelWin()
-                    onUpdateEconomy(gold + 100, 0, freeHammers)
-                    praisePopup = if (lang == Lang.TR) "🏺 ANTİK KÜP PATLADI! +100 🪙" else "🏺 BONUS JAR FULL! +100 🪙"
-                } else {
+                if (foundBonusWords.size > MAX_REWARDED_BONUS_WORDS) {
                     soundEngine.playBonusWord()
-                    onUpdateEconomy(gold + 10, nextJar, freeHammers)
-                    feedbackBanner = if (lang == Lang.TR) "🏺 Bonus ($candidate)! Küp: $nextJar/5 (+10 🪙)" else "🏺 Bonus ($candidate)! Jar: $nextJar/5 (+10 🪙)"
+                    feedbackBanner = if (lang == Lang.TR) "✔ Geçerli kelime ($candidate) — bu bölümün bonus ödülü doldu" else "✔ Valid word ($candidate) — bonus rewards maxed for this level"
+                } else {
+                    val nextJar = bonusJarCount + 1
+                    if (nextJar >= 5) {
+                        soundEngine.playLevelWin()
+                        onUpdateEconomy(gold + 100, 0, freeHammers)
+                        praisePopup = if (lang == Lang.TR) "🏺 ANTİK KÜP PATLADI! +100 🪙" else "🏺 BONUS JAR FULL! +100 🪙"
+                    } else {
+                        soundEngine.playBonusWord()
+                        onUpdateEconomy(gold + 10, nextJar, freeHammers)
+                        feedbackBanner = if (lang == Lang.TR) "🏺 Bonus ($candidate)! Küp: $nextJar/5 (+10 🪙)" else "🏺 Bonus ($candidate)! Jar: $nextJar/5 (+10 🪙)"
+                    }
                 }
             }
             candidate.length >= 2 -> {
@@ -1584,231 +1636,4 @@ fun SpinWheelDialog(
                         isSpinning = false
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = { if (!isSpinning) onDismiss() }) {
-                    Text(if (lang == Lang.TR) "Kapat" else "Close", color = Color.White.copy(alpha = 0.7f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun MuseumBuilderDialog(lang: Lang, currentLevel: Int, worldTheme: WorldTheme, onDismiss: () -> Unit) {
-    val stepInZone = ((currentLevel - 1) % 10) + 1
-    val percent = stepInZone * 10
-
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF0F172A), border = BorderStroke(2.dp, Color(0xFF8B5CF6)), modifier = Modifier.fillMaxHeight(0.84f)) {
-            Column(modifier = Modifier.padding(18.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (lang == Lang.TR) "🏗️ MÜZEMİ İNŞA ET" else "🏗️ BUILD MY MUSEUM", color = Color(0xFFC4B5FD), fontWeight = FontWeight.Black, fontSize = 19.sp)
-                Text(
-                    text = if (lang == Lang.TR) "Aktif İnşaat: ${worldTheme.monumentNameTr} (%$percent)" else "Current Build: $percent%",
-                    color = Color(0xFFFDE047), fontWeight = FontWeight.Bold, fontSize = 13.sp
-                )
-                Spacer(Modifier.height(10.dp))
-
-                // Canlı Mimari Anıt İnşaat Çizimi (10 Kademeli)
-                Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF1E293B), border = BorderStroke(1.dp, worldTheme.accentColor), modifier = Modifier.fillMaxWidth().height(150.dp)) {
-                    Canvas(modifier = Modifier.fillMaxSize().padding(14.dp)) {
-                        val w = size.width; val h = size.height
-                        // 1. Kademe: Mermer Platform Temeli
-                        if (stepInZone >= 1) drawRoundRect(Color(0xFF94A3B8), Offset(w * 0.1f, h * 0.82f), Size(w * 0.8f, h * 0.14f), CornerRadius(8f, 8f))
-                        // 2-3. Kademe: Alt Basamaklar
-                        if (stepInZone >= 2) drawRoundRect(Color(0xFFCBD5E1), Offset(w * 0.16f, h * 0.72f), Size(w * 0.68f, h * 0.10f), CornerRadius(6f, 6f))
-                        // 4-6. Kademe: Tarihi Sütunlar
-                        if (stepInZone >= 4) drawRect(worldTheme.accentColor, Offset(w * 0.22f, h * 0.35f), Size(w * 0.08f, h * 0.37f))
-                        if (stepInZone >= 5) drawRect(worldTheme.accentColor, Offset(w * 0.46f, h * 0.35f), Size(w * 0.08f, h * 0.37f))
-                        if (stepInZone >= 6) drawRect(worldTheme.accentColor, Offset(w * 0.70f, h * 0.35f), Size(w * 0.08f, h * 0.37f))
-                        // 7-8. Kademe: Üst Kemer
-                        if (stepInZone >= 7) drawRoundRect(Color(0xFFE2E8F0), Offset(w * 0.18f, h * 0.25f), Size(w * 0.64f, h * 0.10f), CornerRadius(8f, 8f))
-                        // 9-10. Kademe: Altın Kubbe ve Alem
-                        if (stepInZone >= 9) drawArc(Color(0xFFFBBF24), 180f, 180f, true, Offset(w * 0.28f, h * 0.05f), Size(w * 0.44f, h * 0.40f))
-                    }
-                }
-
-                Spacer(Modifier.height(10.dp))
-                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(HISTORICAL_FACTS) { fact ->
-                        val isUnlocked = currentLevel > fact.levelMilestone
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isUnlocked) Color(0xFF1E293B) else Color.White.copy(alpha = 0.04f),
-                            border = BorderStroke(1.dp, if (isUnlocked) Color(0xFF34D399) else Color.White.copy(alpha = 0.1f))
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
-                                Text(
-                                    text = if (isUnlocked) "✅ ${fact.titleTr} (TAMAMLANDI)" else "🏗️ Seviye ${fact.levelMilestone}'da Tamamlanır: ${fact.titleTr}",
-                                    color = if (isUnlocked) Color(0xFF34D399) else Color.White.copy(alpha = 0.7f),
-                                    fontWeight = FontWeight.Bold, fontSize = 12.sp
-                                )
-                                if (isUnlocked) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(if (lang == Lang.TR) fact.infoTr else fact.infoEn, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))) {
-                    Text(if (lang == Lang.TR) "Tamam" else "Close", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// 10. NEON PUSULA HARF ÇARKI (HAFIZA MODU & MÜHÜR DESTEKLİ)
-// ==========================================
-@Composable
-fun WordSwipeWheel(
-    letters: List<Char>, selectedIndices: List<Int>, sealedIndex: Int?,
-    hideLettersForMemory: Boolean, currentTouchPos: Offset?, comboCount: Int, accentColor: Color,
-    onSelectIndex: (Int) -> Unit, onUpdateTouch: (Offset?) -> Unit, onDragEnd: () -> Unit
-) {
-    val wheelDiameter = 242.dp
-    val density = LocalDensity.current
-    val wheelPx = with(density) { wheelDiameter.toPx() }
-    val center = Offset(wheelPx / 2f, wheelPx / 2f)
-    val orbitRadius = wheelPx * 0.35f
-    val nodeRadius = (wheelPx * (if (letters.size <= 5) 0.125f else if (letters.size <= 7) 0.11f else 0.098f))
-
-    val letterCenters = remember(letters, wheelPx) {
-        letters.indices.map { i ->
-            val angle = -PI / 2 + (2 * PI * i / letters.size)
-            Offset(center.x + (orbitRadius * cos(angle)).toFloat(), center.y + (orbitRadius * sin(angle)).toFloat())
-        }
-    }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "w")
-    val ringRotation by infiniteTransition.animateFloat(0f, 360f, infiniteRepeatable(tween(18000, easing = LinearEasing)), label = "r")
-    val corePulse by infiniteTransition.animateFloat(0.85f, 1.15f, infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "p")
-
-    Box(
-        modifier = Modifier.size(wheelDiameter).pointerInput(letters, sealedIndex) {
-            detectDragGestures(
-                onDragStart = { startOffset ->
-                    onUpdateTouch(startOffset)
-                    letterCenters.forEachIndexed { idx, c -> if ((startOffset - c).getDistance() <= nodeRadius * 1.32f) onSelectIndex(idx) }
-                },
-                onDrag = { change, _ ->
-                    val pos = change.position
-                    onUpdateTouch(pos)
-                    letterCenters.forEachIndexed { idx, c -> if ((pos - c).getDistance() <= nodeRadius * 1.25f) onSelectIndex(idx) }
-                },
-                onDragEnd = { onDragEnd() },
-                onDragCancel = { onDragEnd() }
-            )
-        },
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawCircle(Brush.radialGradient(listOf(Color(0xFF1E1B4B), Color(0xFF0F172A), Color(0xFF090D16)), center, wheelPx / 2f), wheelPx / 2f, center)
-            drawCircle(Brush.sweepGradient(listOf(accentColor, Color(0xFFF59E0B), Color(0xFFA855F7), accentColor), center), wheelPx / 2f - 3f, center, style = Stroke(width = 5f))
-
-            rotate(degrees = ringRotation, pivot = center) {
-                drawCircle(accentColor.copy(alpha = 0.35f), orbitRadius, center, style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 14f), 0f)))
-            }
-
-            letterCenters.forEach { lc -> drawLine(Color.White.copy(alpha = 0.07f), center, lc, strokeWidth = 2.5f) }
-
-            val activeGlow = if (selectedIndices.isNotEmpty()) Color(0xFFF59E0B) else accentColor
-            drawCircle(activeGlow.copy(alpha = 0.18f), 28f * corePulse, center)
-            drawCircle(activeGlow.copy(alpha = 0.55f), 12f, center)
-
-            if (selectedIndices.isNotEmpty()) {
-                val path = Path().apply {
-                    val firstPt = letterCenters[selectedIndices.first()]
-                    moveTo(firstPt.x, firstPt.y)
-                    for (i in 1 until selectedIndices.size) lineTo(letterCenters[selectedIndices[i]].x, letterCenters[selectedIndices[i]].y)
-                    currentTouchPos?.let { lineTo(it.x, it.y) }
-                }
-                drawPath(path, Color(0xFFF59E0B).copy(alpha = 0.35f), style = Stroke(width = 24f, cap = StrokeCap.Round))
-                drawPath(path, Color(0xFFFDE047), style = Stroke(width = 11f, cap = StrokeCap.Round))
-            }
-
-            letterCenters.forEachIndexed { idx, c ->
-                val isSelected = idx in selectedIndices
-                val isSealed = (idx == sealedIndex)
-                val curR = if (isSelected) nodeRadius * 1.18f else nodeRadius
-
-                if (isSelected) drawCircle(Color(0xFFF59E0B).copy(alpha = 0.35f), curR * 1.3f, c)
-
-                drawCircle(
-                    brush = when {
-                        isSealed -> Brush.verticalGradient(listOf(Color(0xFF57534E), Color(0xFF292524)), c.y - curR, c.y + curR)
-                        isSelected -> Brush.verticalGradient(listOf(Color(0xFFFBBF24), Color(0xFFD97706)), c.y - curR, c.y + curR)
-                        else -> Brush.verticalGradient(listOf(Color(0xFF334155), Color(0xFF0F172A)), c.y - curR, c.y + curR)
-                    },
-                    radius = curR, center = c
-                )
-                drawCircle(
-                    color = when { isSealed -> Color(0xFFEF4444); isSelected -> Color.White; else -> accentColor },
-                    radius = curR, center = c, style = Stroke(width = if (isSelected || isSealed) 5f else 3.5f)
-                )
-            }
-        }
-
-        Text(if (comboCount >= 2) "🔥x$comboCount" else "✦", color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.Black, fontSize = if (comboCount >= 2) 13.sp else 16.sp)
-
-        letters.forEachIndexed { idx, ch ->
-            val c = letterCenters[idx]
-            val isSelected = idx in selectedIndices
-            val isSealed = (idx == sealedIndex)
-            val scaleAnim by animateFloatAsState(if (isSelected) 1.22f else 1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "s")
-            val offsetX = with(density) { (c.x - wheelPx / 2f).toDp() }
-            val offsetY = with(density) { (c.y - wheelPx / 2f).toDp() }
-            val displayChar = when {
-                isSealed -> "🪨$ch"
-                hideLettersForMemory && !isSelected -> "?"
-                else -> ch.toString()
-            }
-            Text(
-                text = displayChar,
-                color = when { isSealed -> Color(0xFFFCA5A5); isSelected -> Color(0xFF0F172A); hideLettersForMemory -> Color(0xFFC4B5FD); else -> Color.White },
-                fontWeight = FontWeight.Black,
-                fontSize = (if (isSealed) 16 else if (letters.size <= 6) 23 else 20).sp,
-                modifier = Modifier.offset(x = offsetX, y = offsetY).scale(scaleAnim)
-            )
-        }
-    }
-}
-
-// ==========================================
-// 11. AYARLAR PENCERESİ
-// ==========================================
-@Composable
-fun SettingsDialog(
-    lang: Lang, musicEnabled: Boolean, sfxEnabled: Boolean, highGraphics: Boolean,
-    onToggleMusic: () -> Unit, onToggleSfx: () -> Unit, onToggleGraphics: () -> Unit,
-    onResetProgress: () -> Unit, onDismiss: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF1E293B), border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.25f))) {
-            Column(modifier = Modifier.padding(22.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(if (lang == Lang.TR) "⚙️ OYUN AYARLARI" else "⚙️ GAME SETTINGS", color = Color.White, fontWeight = FontWeight.Black, fontSize = 19.sp)
-                SettingRow(if (lang == Lang.TR) "🎵 Arka Plan Müziği" else "🎵 Background Music", musicEnabled, onToggleMusic)
-                SettingRow(if (lang == Lang.TR) "🔊 Akustik Harp & Efektler" else "🔊 Sound Effects (SFX)", sfxEnabled, onToggleSfx)
-                SettingRow(if (lang == Lang.TR) "✨ Yüksek Grafik & Animasyon" else "✨ High Graphics", highGraphics, onToggleGraphics)
-                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = onResetProgress) { Text(if (lang == Lang.TR) "İlerlemeyi Sıfırla" else "Reset Save", color = Color(0xFFEF4444), fontSize = 13.sp) }
-                    Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))) {
-                        Text(if (lang == Lang.TR) "Tamam" else "Done", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SettingRow(title: String, checked: Boolean, onToggle: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Switch(checked = checked, onCheckedChange = { onToggle() })
-    }
-}
-// === KODUN TAMAMI BİTTİ ===
+                Spacer(Modif
