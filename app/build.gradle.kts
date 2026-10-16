@@ -5,19 +5,37 @@ plugins {
 
 android {
     namespace = "com.selim.kelimeoyunu"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.selim.kelimeoyunu"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 36
+        versionCode = 2
+        versionName = "2.1"
+    }
+
+    signingConfigs {
+        create("release") {
+            val ksFile = file("release.keystore")
+            if (ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            val ksFile = file("release.keystore")
+            signingConfig = if (ksFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
