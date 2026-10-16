@@ -1,10 +1,13 @@
 package com.selim.kelimeoyunu
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -93,9 +96,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.google.android.ump.ConsentRequestParameters
+import com.google.android.ump.UserMessagingPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -112,16 +129,177 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
+    private lateinit var adMobManager: AdMobManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         loadWordLists(applicationContext)
+        adMobManager = AdMobManager(this)
+        adMobManager.requestConsentAndInitAds()
         setContent {
             MaterialTheme {
-                WordGameApp(onExitApp = { finish() })
+                WordGameApp(adMobManager = adMobManager, onExitApp = { finish() })
             }
         }
     }
+}
+
+// ==========================================
+// 0. GOOGLE ADMOB & UMP YONETICISI (RESMI TEST KIMLIKLERI)
+// ==========================================
+class AdMobManager(private val activity: Activity) {
+    companion object {
+        // Google Resmi Test Reklam Birimi Kimlikleri (Gelistirme asamasinda ban riskini sifira indirir)
+        const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
+        const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
+        const val TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917"
+        const val PRIVACY_POLICY_URL = "https://github.com/baydemirel52-alt/kelime-oyunu"
+    }
+
+    private var interstitialAd: InterstitialAd? = null
+    private var rewardedAd: RewardedAd? = null
+    private var lastInterstitialTimeMs: Long = 0L
+    var isRewardedLoaded by mutableStateOf(false)
+        private set
+
+    fun requestConsentAndInitAds() {
+        val params = ConsentRequestParameters.Builder().build()
+        val consentInfo = UserMessagingPlatform.getConsentInformation(activity)
+        consentInfo.requestConsentInfoUpdate(
+            activity,
+            params,
+            {
+                UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) {
+                    if (consentInfo.canRequestAds()) {
+                        initMobileAds()
+                    }
+                }
+            },
+            {
+                initMobileAds()
+            }
+        )
+        if (consentInfo.canRequestAds()) {
+            initMobileAds()
+        }
+    }
+
+    private fun initMobileAds() {
+        MobileAds.initialize(activity) {
+            loadInterstitial()
+            loadRewarded()
+        }
+    }
+
+    fun loadInterstitial() {
+        InterstitialAd.load(
+            activity,
+            TEST_INTERSTITIAL_ID,
+            AdRequest.Builder().build(),
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    interstitialAd = ad
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    interstitialAd = null
+                }
+            }
+        )
+    }
+
+    fun loadRewarded() {
+        RewardedAd.load(
+            activity,
+            TEST_REWARDED_ID,
+            AdRequest.Builder().build(),
+            object : RewardedAdLoadCallback() {
+                override fun onAdLoaded(ad: RewardedAd) {
+                    rewardedAd = ad
+                    isRewardedLoaded = true
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    rewardedAd = null
+                    isRewardedLoaded = false
+                }
+            }
+        )
+    }
+
+    // Ilk 5 bolumde cikmaz, sonrasinda en az 3 dakika (180.000 ms) arayla cikar
+    fun maybeShowInterstitial(completedLevel: Int, onFinished: () -> Unit) {
+        val now = System.currentTimeMillis()
+        val minIntervalMs = 3 * 60 * 1000L
+        val ad = interstitialAd
+        if (completedLevel > 5 && ad != null && (now - lastInterstitialTimeMs >= minIntervalMs)) {
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    interstitialAd = null
+                    lastInterstitialTimeMs = System.currentTimeMillis()
+                    loadInterstitial()
+                    onFinished()
+                }
+                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                    interstitialAd = null
+                    loadInterstitial()
+                    onFinished()
+                }
+            }
+            ad.show(activity)
+        } else {
+            if (ad == null) loadInterstitial()
+            onFinished()
+        }
+    }
+
+    fun showRewardedAd(onRewardEarned: () -> Unit, onNotReady: () -> Unit) {
+        val ad = rewardedAd
+        if (ad == null) {
+            loadRewarded()
+            onNotReady()
+            return
+        }
+        var earned = false
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() {
+                rewardedAd = null
+                isRewardedLoaded = false
+                loadRewarded()
+                if (earned) onRewardEarned()
+            }
+            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                rewardedAd = null
+                isRewardedLoaded = false
+                loadRewarded()
+                onNotReady()
+            }
+        }
+        ad.show(activity) {
+            earned = true
+        }
+    }
+
+    fun openPrivacyPolicy() {
+        try {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
+        } catch (_: Exception) {}
+    }
+}
+
+@Composable
+fun MenuBannerAdView() {
+    AndroidView(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        factory = { ctx ->
+            AdView(ctx).apply {
+                setAdSize(AdSize.BANNER)
+                adUnitId = AdMobManager.TEST_BANNER_ID
+                loadAd(AdRequest.Builder().build())
+            }
+        }
+    )
 }
 
 // ==========================================
@@ -222,7 +400,6 @@ class ProceduralSoundEngine(private val appContext: Context) {
             return
         }
 
-        // 1. Öncelik: assets/bg_music.mp3 veya bg_music.ogg varsa gerçek ses dosyasını çal!
         if (!assetMusicChecked) {
             assetMusicChecked = true
             val candidates = listOf("bg_music.mp3", "bg_music.ogg", "music.mp3")
@@ -255,23 +432,21 @@ class ProceduralSoundEngine(private val appContext: Context) {
             return
         }
 
-        // 2. Yedek: Kulağı asla yormayan, nefes aralıklı 16 akorluk yumuşak Zen Ambiyans Pad
         musicJob = scope.launch {
             val zenChords = arrayOf(
-                doubleArrayOf(130.81, 196.00, 246.94), // Cmaj7
-                doubleArrayOf(110.00, 164.81, 220.00), // Am7
-                doubleArrayOf(87.31, 130.81, 174.61),  // Fmaj7
-                doubleArrayOf(98.00, 146.83, 196.00),  // G6
-                doubleArrayOf(116.54, 174.61, 220.00), // Dm7
-                doubleArrayOf(110.00, 164.81, 246.94), // Am9
-                doubleArrayOf(87.31, 146.83, 220.00),  // F6/9
-                doubleArrayOf(98.00, 164.81, 246.94)   // Gmaj7
+                doubleArrayOf(130.81, 196.00, 246.94),
+                doubleArrayOf(110.00, 164.81, 220.00),
+                doubleArrayOf(87.31, 130.81, 174.61),
+                doubleArrayOf(98.00, 146.83, 196.00),
+                doubleArrayOf(116.54, 174.61, 220.00),
+                doubleArrayOf(110.00, 164.81, 246.94),
+                doubleArrayOf(87.31, 146.83, 220.00),
+                doubleArrayOf(98.00, 164.81, 246.94)
             )
             var step = 0
             while (isActive && musicEnabled && isAppInForeground) {
                 val chord = zenChords[step % zenChords.size]
                 playAmbientPadChord(chord[0], chord[1], chord[2], 2400, 0.032f)
-                // Akorlar arası dinlendirici sessizlik
                 delay(2200)
                 step++
             }
@@ -286,12 +461,8 @@ class ProceduralSoundEngine(private val appContext: Context) {
             for (i in 0 until numSamples) {
                 val t = i.toDouble() / sampleRate
                 val progress = i.toDouble() / numSamples
-                // Yumuşak fade-in ve fade-out zarfı (tık sesi veya sert giriş yapmaz)
                 val env = sin(PI * progress)
-                val w1 = sin(2.0 * PI * f1 * t)
-                val w2 = 0.7 * sin(2.0 * PI * f2 * t)
-                val w3 = 0.5 * sin(2.0 * PI * f3 * t)
-                val wave = (w1 + w2 + w3) / 2.2
+                val wave = (sin(2.0 * PI * f1 * t) + 0.7 * sin(2.0 * PI * f2 * t) + 0.5 * sin(2.0 * PI * f3 * t)) / 2.2
                 samples[i] = (wave * Short.MAX_VALUE * volume * env).toInt()
                     .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
             }
@@ -307,10 +478,7 @@ class ProceduralSoundEngine(private val appContext: Context) {
             for (i in 0 until numSamples) {
                 val t = i.toDouble() / sampleRate
                 val env = exp(-4.5 * i.toDouble() / numSamples) * (if (i < 60) i / 60.0 else 1.0)
-                val fundamental = sin(2.0 * PI * freqHz * t)
-                val fifth = 0.35 * sin(2.0 * PI * (freqHz * 1.498) * t)
-                val octave = 0.25 * sin(2.0 * PI * (freqHz * 2.0) * t)
-                val wave = (fundamental + fifth + octave) / 1.6
+                val wave = (sin(2.0 * PI * freqHz * t) + 0.35 * sin(2.0 * PI * (freqHz * 1.498) * t) + 0.25 * sin(2.0 * PI * (freqHz * 2.0) * t)) / 1.6
                 samples[i] = (wave * Short.MAX_VALUE * volume * env).toInt()
                     .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
             }
@@ -327,9 +495,8 @@ class ProceduralSoundEngine(private val appContext: Context) {
             for (i in 0 until numSamples) {
                 val t = i.toDouble() / sampleRate
                 val env = exp(-8.0 * i.toDouble() / numSamples)
-                val punch = sin(2.0 * PI * baseFreq * t)
-                val crunch = (rng.nextDouble() * 2.0 - 1.0) * 0.4
-                samples[i] = ((punch + crunch) * 0.7 * Short.MAX_VALUE * volume * env).toInt()
+                val wave = (sin(2.0 * PI * baseFreq * t) + (rng.nextDouble() * 2.0 - 1.0) * 0.4) * 0.7
+                samples[i] = (wave * Short.MAX_VALUE * volume * env).toInt()
                     .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
             }
             writeAndPlayTrack(samples, sampleRate, durationMs)
@@ -797,16 +964,16 @@ private fun canPlaceWord(grid: Array<CharArray>, word: String, r: Int, c: Int, i
 enum class Screen { MENU, GAME }
 
 @Composable
-fun WordGameApp(onExitApp: () -> Unit) {
+fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("kelime_efsanesi_prefs", Context.MODE_PRIVATE) }
     val soundEngine = remember { ProceduralSoundEngine(context.applicationContext) }
 
     val appVersionName = remember {
         try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1"
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.2"
         } catch (_: Exception) {
-            "2.1"
+            "2.2"
         }
     }
 
@@ -819,7 +986,15 @@ fun WordGameApp(onExitApp: () -> Unit) {
     var musicEnabled by remember { mutableStateOf(prefs.getBoolean("music", true)) }
     var sfxEnabled by remember { mutableStateOf(prefs.getBoolean("sfx", true)) }
     var highGraphics by remember { mutableStateOf(prefs.getBoolean("graphics", true)) }
+
+    // Gunluk Cark Siniri (Gunde 1 Ucretsiz + En Fazla 2 Reklamli = Toplam 3 Hak)
+    val todayDayNumber = remember { (System.currentTimeMillis() / (1000 * 60 * 60 * 24)).toInt() }
     var lastSpinDay by remember { mutableIntStateOf(prefs.getInt("spin_day", -1)) }
+    var spinsUsedToday by remember {
+        val savedDay = prefs.getInt("spin_day", -1)
+        val savedCount = prefs.getInt("spin_count_today", 0)
+        mutableIntStateOf(if (savedDay == todayDayNumber) savedCount else 0)
+    }
 
     var screen by remember { mutableStateOf(Screen.MENU) }
     var showSettings by remember { mutableStateOf(false) }
@@ -838,6 +1013,7 @@ fun WordGameApp(onExitApp: () -> Unit) {
             .putBoolean("sfx", sfxEnabled)
             .putBoolean("graphics", highGraphics)
             .putInt("spin_day", lastSpinDay)
+            .putInt("spin_count_today", spinsUsedToday)
             .apply()
     }
 
@@ -878,6 +1054,7 @@ fun WordGameApp(onExitApp: () -> Unit) {
                     lang = lang,
                     level = currentLevel,
                     gold = gold,
+                    spinsRemainingToday = (3 - spinsUsedToday).coerceAtLeast(0),
                     versionName = appVersionName,
                     worldTheme = worldTheme,
                     onToggleLang = {
@@ -902,6 +1079,7 @@ fun WordGameApp(onExitApp: () -> Unit) {
                         freeHammers = freeHammers,
                         worldTheme = worldTheme,
                         soundEngine = soundEngine,
+                        adMobManager = adMobManager,
                         onUpdateEconomy = { newGold, newJar, newHammers ->
                             gold = newGold
                             bonusJarCount = newJar
@@ -909,9 +1087,12 @@ fun WordGameApp(onExitApp: () -> Unit) {
                             saveState()
                         },
                         onLevelCompleted = { earnedGold ->
+                            val finishedLvl = currentLevel
                             gold += earnedGold
                             currentLevel = if (currentLevel < 300) currentLevel + 1 else 1
                             saveState()
+                            // Ilk 5 bolumde cikmaz, sonrasinda en az 3 dk arayla gecis reklami gosterir
+                            adMobManager.maybeShowInterstitial(finishedLvl) {}
                         },
                         onOpenSpinWheel = { soundEngine.playClick(); showSpinWheelDialog = true },
                         onOpenMuseum = { soundEngine.playClick(); showMuseumDialog = true },
@@ -947,16 +1128,19 @@ fun WordGameApp(onExitApp: () -> Unit) {
 
         if (showSpinWheelDialog) {
             val today = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)).toInt()
-            val isFreeSpinAvailable = (lastSpinDay != today)
+            if (lastSpinDay != today) {
+                spinsUsedToday = 0
+            }
             SpinWheelDialog(
                 lang = lang,
-                gold = gold,
-                isFreeSpin = isFreeSpinAvailable,
+                spinsUsedToday = spinsUsedToday,
                 soundEngine = soundEngine,
-                onPrizeWon = { goldDelta, hammerDelta, usedFree ->
+                adMobManager = adMobManager,
+                onPrizeWon = { goldDelta, hammerDelta ->
                     gold = (gold + goldDelta).coerceAtLeast(0)
                     freeHammers += hammerDelta
-                    if (usedFree) lastSpinDay = today
+                    lastSpinDay = today
+                    spinsUsedToday += 1
                     saveState()
                 },
                 onDismiss = { soundEngine.playClick(); showSpinWheelDialog = false }
@@ -981,12 +1165,17 @@ fun WordGameApp(onExitApp: () -> Unit) {
                 onToggleMusic = { soundEngine.playClick(); musicEnabled = !musicEnabled },
                 onToggleSfx = { sfxEnabled = !sfxEnabled; soundEngine.sfxEnabled = sfxEnabled; soundEngine.playClick() },
                 onToggleGraphics = { soundEngine.playClick(); highGraphics = !highGraphics; saveState() },
+                onOpenPrivacyPolicy = {
+                    soundEngine.playClick()
+                    adMobManager.openPrivacyPolicy()
+                },
                 onResetProgress = {
                     soundEngine.playClick()
                     currentLevel = 1
                     gold = 200
                     bonusJarCount = 0
                     freeHammers = 1
+                    spinsUsedToday = 0
                     saveState()
                     showSettings = false
                 },
@@ -1060,13 +1249,14 @@ fun ConfettiEffectOverlay() {
 }
 
 // ==========================================
-// 7. ANA MENU EKRANI
+// 7. ANA MENU EKRANI (ALT BANNER REKLAM DESTEKLI)
 // ==========================================
 @Composable
 fun MainMenuScreen(
     lang: Lang,
     level: Int,
     gold: Int,
+    spinsRemainingToday: Int,
     versionName: String,
     worldTheme: WorldTheme,
     onToggleLang: () -> Unit,
@@ -1081,7 +1271,7 @@ fun MainMenuScreen(
     val buildPercent = buildStep * 10
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 14.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -1147,17 +1337,38 @@ fun MainMenuScreen(
             }
         }
 
-        Column(modifier = Modifier.fillMaxWidth(0.88f), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            MenuButton(if (lang == Lang.TR) "▶  BAŞLA (SEVİYE $level)" else "▶  PLAY (LEVEL $level)", listOf(Color(0xFF10B981), Color(0xFF059669)), 58.dp, 18, onStartGame)
+        Column(modifier = Modifier.fillMaxWidth(0.88f), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            MenuButton(if (lang == Lang.TR) "▶  BAŞLA (SEVİYE $level)" else "▶  PLAY (LEVEL $level)", listOf(Color(0xFF10B981), Color(0xFF059669)), 56.dp, 18, onStartGame)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.weight(1f)) { MenuButton(if (lang == Lang.TR) "🎡 Şans Çarkı" else "🎡 Spin Wheel", listOf(Color(0xFFF59E0B), Color(0xFFD97706)), 50.dp, 14, onOpenSpinWheel) }
-                Box(Modifier.weight(1f)) { MenuButton(if (lang == Lang.TR) "🏗️ Müzemi İnşa Et" else "🏗️ My Museum", listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)), 50.dp, 13, onOpenMuseum) }
+                Box(Modifier.weight(1f)) {
+                    MenuButton(
+                        text = if (lang == Lang.TR) "🎡 Çark ($spinsRemainingToday/3)" else "🎡 Spin ($spinsRemainingToday/3)",
+                        gradient = listOf(Color(0xFFF59E0B), Color(0xFFD97706)),
+                        height = 48.dp,
+                        fontSize = 13,
+                        onClick = onOpenSpinWheel
+                    )
+                }
+                Box(Modifier.weight(1f)) {
+                    MenuButton(
+                        text = if (lang == Lang.TR) "🏗️ Müzemi İnşa Et" else "🏗️ My Museum",
+                        gradient = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)),
+                        height = 48.dp,
+                        fontSize = 13,
+                        onClick = onOpenMuseum
+                    )
+                }
             }
-            MenuButton(if (lang == Lang.TR) "⚙️  AYARLAR" else "⚙️  SETTINGS", listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)), 50.dp, 16, onOpenSettings)
-            MenuButton(if (lang == Lang.TR) "🚪  ÇIKIŞ YAP" else "🚪  EXIT GAME", listOf(Color(0xFFEF4444), Color(0xFFB91C1C)), 48.dp, 15, onExit)
+            MenuButton(if (lang == Lang.TR) "⚙️  AYARLAR" else "⚙️  SETTINGS", listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)), 48.dp, 15, onOpenSettings)
+            MenuButton(if (lang == Lang.TR) "🚪  ÇIKIŞ YAP" else "🚪  EXIT GAME", listOf(Color(0xFFEF4444), Color(0xFFB91C1C)), 46.dp, 14, onExit)
         }
 
-        Text("Galaxy Store & Play Edition • v$versionName", color = Color.White.copy(alpha = 0.35f), fontSize = 11.sp)
+        // Sadece Ana Menude Banner Reklam (Oyun icinde carkin yaninda yanlislikla tiklanmamasi icin)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            MenuBannerAdView()
+            Spacer(Modifier.height(4.dp))
+            Text("Galaxy Store & Play Edition • v$versionName", color = Color.White.copy(alpha = 0.35f), fontSize = 10.sp)
+        }
     }
 }
 
@@ -1172,7 +1383,7 @@ fun MenuButton(text: String, gradient: List<Color>, height: Dp, fontSize: Int, o
 }
 
 // ==========================================
-// 8. OYUN ICI EKRANI
+// 8. OYUN ICI EKRANI (ODULLU REKLAM DESTEKLI)
 // ==========================================
 @Composable
 fun GameplayScreen(
@@ -1183,6 +1394,7 @@ fun GameplayScreen(
     freeHammers: Int,
     worldTheme: WorldTheme,
     soundEngine: ProceduralSoundEngine,
+    adMobManager: AdMobManager,
     onUpdateEconomy: (Int, Int, Int) -> Unit,
     onLevelCompleted: (Int) -> Unit,
     onOpenSpinWheel: () -> Unit,
@@ -1218,6 +1430,7 @@ fun GameplayScreen(
 
     var praisePopup by remember { mutableStateOf<String?>(null) }
     var winPraiseTitle by remember(puzzle) { mutableStateOf("") }
+    var winRewardDoubled by remember(puzzle) { mutableStateOf(false) }
 
     var remainingSeconds by remember(puzzle) { mutableIntStateOf(puzzle.timeLimitSec) }
     var isTimeOut by remember(puzzle) { mutableStateOf(false) }
@@ -1413,9 +1626,9 @@ fun GameplayScreen(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        IconButton(onClick = onBackToMenu, modifier = Modifier.size(38.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)) {
-                            Text("⬅", fontSize = 17.sp, color = Color.White)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        IconButton(onClick = onBackToMenu, modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)) {
+                            Text("⬅", fontSize = 16.sp, color = Color.White)
                         }
                         Surface(
                             onClick = onOpenSpinWheel,
@@ -1423,7 +1636,7 @@ fun GameplayScreen(
                             color = Color(0xFFF59E0B).copy(alpha = 0.25f),
                             border = BorderStroke(1.dp, Color(0xFFFBBF24))
                         ) {
-                            Text("🎡", fontSize = 16.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+                            Text("🎡", fontSize = 15.sp, modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp))
                         }
                         Surface(
                             onClick = onOpenMuseum,
@@ -1431,26 +1644,46 @@ fun GameplayScreen(
                             color = Color(0xFF8B5CF6).copy(alpha = 0.25f),
                             border = BorderStroke(1.dp, Color(0xFFC4B5FD))
                         ) {
-                            Text("🏗️%$buildPercent", color = Color(0xFFE9D5FF), fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
+                            Text("🏗️%$buildPercent", color = Color(0xFFE9D5FF), fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp))
                         }
                     }
 
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(league.icon, fontSize = 15.sp)
-                            Spacer(Modifier.width(4.dp))
-                            Text(if (lang == Lang.TR) "SEVİYE $level" else "LEVEL $level", color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                            Text(league.icon, fontSize = 14.sp)
+                            Spacer(Modifier.width(3.dp))
+                            Text(if (lang == Lang.TR) "SEVİYE $level" else "LEVEL $level", color = Color.White, fontWeight = FontWeight.Black, fontSize = 15.sp)
                         }
                         Text(if (lang == Lang.TR) worldTheme.regionNameTr else worldTheme.regionNameEn, color = worldTheme.accentColor, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF1E293B), border = BorderStroke(1.dp, Color(0xFFFBBF24))) {
-                            Text("🪙 $gold", color = Color(0xFFFBBF24), fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF1E293B), border = BorderStroke(1.dp, Color(0xFFFBBF24))) {
+                            Text("🪙$gold", color = Color(0xFFFBBF24), fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
                         }
-                        Spacer(Modifier.width(5.dp))
-                        IconButton(onClick = onOpenSettings, modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)) {
-                            Text("⚙️", fontSize = 15.sp)
+                        // Odullu Reklam ile +50 Altin Destek Butonu
+                        Surface(
+                            onClick = {
+                                soundEngine.playClick()
+                                adMobManager.showRewardedAd(
+                                    onRewardEarned = {
+                                        soundEngine.playLevelWin()
+                                        onUpdateEconomy(gold + 50, bonusJarCount, freeHammers)
+                                        praisePopup = if (lang == Lang.TR) "🎬 REKLAM ÖDÜLÜ: +50 🪙!" else "🎬 AD REWARD: +50 🪙!"
+                                    },
+                                    onNotReady = {
+                                        feedbackBanner = if (lang == Lang.TR) "⏳ Reklam yükleniyor, birkaç saniye sonra tekrar dene!" else "⏳ Ad loading, try again in a moment!"
+                                    }
+                                )
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFF065F46),
+                            border = BorderStroke(1.dp, Color(0xFF34D399))
+                        ) {
+                            Text("🎬+50", color = Color(0xFFA7F3D0), fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp))
+                        }
+                        IconButton(onClick = onOpenSettings, modifier = Modifier.size(34.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)) {
+                            Text("⚙️", fontSize = 14.sp)
                         }
                     }
                 }
@@ -1641,17 +1874,29 @@ fun GameplayScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Ipucu: Altin yetmezse Odullu Reklam ile bedava Ipucu verir!
                     Surface(
                         onClick = {
                             val unrevealed = cellMap.filter { !it.value.second }.keys.toList()
-                            if (gold >= 50 && unrevealed.isNotEmpty()) {
+                            if (unrevealed.isEmpty()) return@Surface
+                            if (gold >= 50) {
                                 soundEngine.playClick()
                                 onUpdateEconomy(gold - 50, bonusJarCount, freeHammers)
                                 revealedCells = revealedCells + unrevealed.random()
                                 breakBossSealIfNeeded()
-                            } else if (gold < 50) {
-                                soundEngine.playError()
-                                feedbackBanner = if (lang == Lang.TR) "İpucu için 50 🪙 gerekir!" else "Need 50 🪙!"
+                            } else {
+                                soundEngine.playClick()
+                                adMobManager.showRewardedAd(
+                                    onRewardEarned = {
+                                        soundEngine.playWordSuccess()
+                                        revealedCells = revealedCells + unrevealed.random()
+                                        breakBossSealIfNeeded()
+                                    },
+                                    onNotReady = {
+                                        soundEngine.playError()
+                                        feedbackBanner = if (lang == Lang.TR) "İpucu için 50 🪙 gerekir (Reklam henüz hazır değil)!" else "Need 50 🪙!"
+                                    }
+                                )
                             }
                         },
                         shape = RoundedCornerShape(14.dp),
@@ -1661,10 +1906,11 @@ fun GameplayScreen(
                         Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("💡", fontSize = 14.sp)
                             Spacer(Modifier.width(4.dp))
-                            Text("50", color = Color(0xFFFBBF24), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            Text(if (gold >= 50) "50" else "🎬", color = Color(0xFFFBBF24), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                         }
                     }
 
+                    // Cekic: Altin yetmezse Odullu Reklam ile +1 Bedava Cekic verir!
                     Surface(
                         onClick = {
                             if (isHammerMode) {
@@ -1674,8 +1920,18 @@ fun GameplayScreen(
                                 soundEngine.playClick()
                                 isHammerMode = true
                             } else {
-                                soundEngine.playError()
-                                feedbackBanner = if (lang == Lang.TR) "Çekiç için 80 🪙 gerekir!" else "Need 80 🪙!"
+                                soundEngine.playClick()
+                                adMobManager.showRewardedAd(
+                                    onRewardEarned = {
+                                        soundEngine.playLevelWin()
+                                        onUpdateEconomy(gold, bonusJarCount, freeHammers + 1)
+                                        isHammerMode = true
+                                    },
+                                    onNotReady = {
+                                        soundEngine.playError()
+                                        feedbackBanner = if (lang == Lang.TR) "Çekiç için 80 🪙 gerekir (Reklam henüz hazır değil)!" else "Need 80 🪙!"
+                                    }
+                                )
                             }
                         },
                         shape = RoundedCornerShape(14.dp),
@@ -1686,7 +1942,7 @@ fun GameplayScreen(
                             Text("🔨", fontSize = 14.sp)
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                text = if (freeHammers > 0) "x$freeHammers" else "80",
+                                text = if (freeHammers > 0) "x$freeHammers" else if (gold >= 80) "80" else "🎬",
                                 color = if (isHammerMode) Color.Black else Color(0xFFFDBA74),
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 12.sp
@@ -1807,6 +2063,7 @@ fun GameplayScreen(
         }
     }
 
+    // SURE DOLUNCA ODULLU REKLAM VEYA ALTIN ILE +30 SANIYE
     if (isTimeOut) {
         Dialog(onDismissRequest = {}) {
             Surface(shape = RoundedCornerShape(22.dp), color = Color(0xFF1E293B), border = BorderStroke(2.dp, Color(0xFFEF4444))) {
@@ -1815,19 +2072,36 @@ fun GameplayScreen(
                     Spacer(Modifier.height(8.dp))
                     Text(if (lang == Lang.TR) "SÜRE DOLDU!" else "TIME'S UP!", color = Color.White, fontWeight = FontWeight.Black, fontSize = 22.sp)
                     Spacer(Modifier.height(14.dp))
-                    MenuButton(if (lang == Lang.TR) "+30 Saniye Ekle (Ücretsiz)" else "+30 Seconds (Free)", listOf(Color(0xFF10B981), Color(0xFF059669)), 46.dp, 14) {
+                    MenuButton(
+                        text = if (lang == Lang.TR) "🎬 Reklam İzle (+30 Sn Ekle)" else "🎬 Watch Ad (+30s)",
+                        gradient = listOf(Color(0xFF10B981), Color(0xFF059669)),
+                        height = 48.dp,
+                        fontSize = 14
+                    ) {
                         soundEngine.playClick()
-                        remainingSeconds = 30
-                        isTimeOut = false
+                        adMobManager.showRewardedAd(
+                            onRewardEarned = {
+                                remainingSeconds = 30
+                                isTimeOut = false
+                            },
+                            onNotReady = {
+                                // Test sirasinda reklam henuz yuklenmediyse oyuncuyu magdur etmemek icin verir
+                                remainingSeconds = 30
+                                isTimeOut = false
+                            }
+                        )
                     }
                 }
             }
         }
     }
 
+    // BOLUM SONU EKRANI (ODULU 2'YE KATLAMA REKLAM BUTONU ILE)
     if (showWinDialog) {
         val monumentCompleteBonus = if (level % 10 == 0) 150 else 0
-        val totalEarned = 30 + (if (puzzle.isTimeAttack) remainingSeconds * 2 else 0) + (if (puzzle.isBossLevel) 80 else 0) + monumentCompleteBonus
+        val baseTotal = 30 + (if (puzzle.isTimeAttack) remainingSeconds * 2 else 0) + (if (puzzle.isBossLevel) 80 else 0) + monumentCompleteBonus
+        val finalEarned = if (winRewardDoubled) baseTotal * 2 else baseTotal
+
         Dialog(onDismissRequest = {}) {
             Box(contentAlignment = Alignment.Center) {
                 ConfettiEffectOverlay()
@@ -1847,7 +2121,7 @@ fun GameplayScreen(
                         Spacer(Modifier.height(8.dp))
                         Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF064E3B), border = BorderStroke(1.dp, Color(0xFF34D399))) {
                             Text(
-                                text = if (lang == Lang.TR) "Toplam Ödül: +$totalEarned 🪙 • Müze: %$buildPercent" else "Reward: +$totalEarned 🪙 • Museum: $buildPercent%",
+                                text = if (lang == Lang.TR) "Toplam Ödül: +$finalEarned 🪙 • Müze: %$buildPercent" else "Reward: +$finalEarned 🪙 • Museum: $buildPercent%",
                                 color = Color(0xFF6EE7B7),
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 13.sp,
@@ -1866,11 +2140,33 @@ fun GameplayScreen(
                             }
                         }
 
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(12.dp))
+
+                        if (!winRewardDoubled) {
+                            MenuButton(
+                                text = if (lang == Lang.TR) "🎬 REKLAM İZLE -> ÖDÜLÜ 2'YE KATLA (+${baseTotal * 2} 🪙)" else "🎬 WATCH AD -> 2x REWARD (+${baseTotal * 2} 🪙)",
+                                gradient = listOf(Color(0xFFF59E0B), Color(0xFFD97706)),
+                                height = 46.dp,
+                                fontSize = 13
+                            ) {
+                                soundEngine.playClick()
+                                adMobManager.showRewardedAd(
+                                    onRewardEarned = {
+                                        soundEngine.playLevelWin()
+                                        winRewardDoubled = true
+                                    },
+                                    onNotReady = {
+                                        feedbackBanner = if (lang == Lang.TR) "⏳ Reklam henüz hazır değil!" else "⏳ Ad not ready yet!"
+                                    }
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+
                         MenuButton(if (lang == Lang.TR) "SEVİYE ${level + 1}'E GEÇ ➔" else "CONTINUE TO LEVEL ${level + 1} ➔", listOf(Color(0xFF10B981), Color(0xFF059669)), 48.dp, 15) {
                             soundEngine.playClick()
                             showWinDialog = false
-                            onLevelCompleted(totalEarned)
+                            onLevelCompleted(finalEarned)
                         }
                     }
                 }
@@ -1880,15 +2176,15 @@ fun GameplayScreen(
 }
 
 // ==========================================
-// 9. DONEN SANS CARKI & MUZEMI INSA ET PENCERELERI
+// 9. SINIRLANDIRILMIS GUNLUK SANS CARKI (1 UCRETSIZ + 2 REKLAMLI = MAX 3)
 // ==========================================
 @Composable
 fun SpinWheelDialog(
     lang: Lang,
-    gold: Int,
-    isFreeSpin: Boolean,
+    spinsUsedToday: Int,
     soundEngine: ProceduralSoundEngine,
-    onPrizeWon: (Int, Int, Boolean) -> Unit,
+    adMobManager: AdMobManager,
+    onPrizeWon: (Int, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     val prizesTr = listOf("+50 🪙", "+100 🪙", "🔨 Çekiç", "+150 🪙", "+75 🪙", "💎 250 🪙")
@@ -1898,20 +2194,54 @@ fun SpinWheelDialog(
     var resultText by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
+    val maxDailySpins = 3
+    val remainingSpins = (maxDailySpins - spinsUsedToday).coerceAtLeast(0)
+    val isFirstFreeSpin = (spinsUsedToday == 0)
+
     val animatedAngle by animateFloatAsState(
         targetValue = targetAngle,
         animationSpec = tween(durationMillis = 2800, easing = FastOutSlowInEasing),
         label = "spin"
     )
 
+    fun startSpinAnimation() {
+        isSpinning = true
+        resultText = null
+        val winIdx = Random.nextInt(prizesTr.size)
+        val extraSpins = 5 * 360f
+        val sliceAngle = 360f / prizesTr.size
+        targetAngle += extraSpins + (360f - winIdx * sliceAngle)
+
+        scope.launch {
+            repeat(10) { delay(240); soundEngine.playWheelTick() }
+            delay(450)
+            soundEngine.playLevelWin()
+            when (winIdx) {
+                0 -> { onPrizeWon(50, 0); resultText = "🎉 +50 🪙 KAZANDIN!" }
+                1 -> { onPrizeWon(100, 0); resultText = "🎉 +100 🪙 KAZANDIN!" }
+                2 -> { onPrizeWon(0, 1); resultText = "🎉 +1 BEDAVA 🔨 ÇEKİÇ KAZANDIN!" }
+                3 -> { onPrizeWon(150, 0); resultText = "🎉 +150 🪙 KAZANDIN!" }
+                4 -> { onPrizeWon(75, 0); resultText = "🎉 +75 🪙 KAZANDIN!" }
+                else -> { onPrizeWon(250, 0); resultText = "💎 JACKPOT! +250 🪙 KAZANDIN!" }
+            }
+            isSpinning = false
+        }
+    }
+
     Dialog(onDismissRequest = { if (!isSpinning) onDismiss() }) {
         Surface(shape = RoundedCornerShape(26.dp), color = Color(0xFF0F172A), border = BorderStroke(2.dp, Color(0xFFFBBF24))) {
             Column(modifier = Modifier.padding(20.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (lang == Lang.TR) "🎡 GÜNLÜK ŞANS ÇARKI" else "🎡 LUCKY SPIN WHEEL", color = Color(0xFFFBBF24), fontWeight = FontWeight.Black, fontSize = 20.sp)
-                Spacer(Modifier.height(6.dp))
+                Text(if (lang == Lang.TR) "🎡 GÜNLÜK ŞANS ÇARKI" else "🎡 DAILY SPIN WHEEL", color = Color(0xFFFBBF24), fontWeight = FontWeight.Black, fontSize = 20.sp)
+                Text(
+                    text = if (lang == Lang.TR) "Bugün Kalan Hakkın: $remainingSpins / $maxDailySpins" else "Daily Spins Left: $remainingSpins / $maxDailySpins",
+                    color = Color(0xFF38BDF8),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+                Spacer(Modifier.height(4.dp))
                 Text("🔻", fontSize = 22.sp)
 
-                Box(modifier = Modifier.size(210.dp), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.size(205.dp), contentAlignment = Alignment.Center) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         rotate(animatedAngle) {
                             val sweep = 360f / prizesTr.size
@@ -1942,40 +2272,30 @@ fun SpinWheelDialog(
                 Spacer(Modifier.height(14.dp))
 
                 MenuButton(
-                    text = if (isSpinning) (if (lang == Lang.TR) "ÇARK DÖNÜYOR..." else "SPINNING...")
-                    else if (isFreeSpin) (if (lang == Lang.TR) "ÜCRETSİZ ÇEVİR! 🎰" else "FREE SPIN! 🎰")
-                    else (if (lang == Lang.TR) "TEKRAR ÇEVİR (40 🪙)" else "SPIN AGAIN (40 🪙)"),
-                    gradient = listOf(Color(0xFF10B981), Color(0xFF059669)),
+                    text = when {
+                        isSpinning -> if (lang == Lang.TR) "ÇARK DÖNÜYOR..." else "SPINNING..."
+                        remainingSpins <= 0 -> if (lang == Lang.TR) "⏳ GÜNLÜK HAKKIN DOLDU (Yarın Gel)" else "⏳ DAILY LIMIT REACHED"
+                        isFirstFreeSpin -> if (lang == Lang.TR) "ÜCRETSİZ ÇEVİR! (1/1) 🎰" else "FREE SPIN! (1/1) 🎰"
+                        else -> if (lang == Lang.TR) "🎬 REKLAM İZLE & ÇEVİR ($remainingSpins Hak)" else "🎬 WATCH AD TO SPIN ($remainingSpins Left)"
+                    },
+                    gradient = if (remainingSpins > 0) listOf(Color(0xFF10B981), Color(0xFF059669)) else listOf(Color(0xFF475569), Color(0xFF334155)),
                     height = 48.dp,
-                    fontSize = 15
+                    fontSize = 14
                 ) {
-                    if (isSpinning) return@MenuButton
-                    if (!isFreeSpin && gold < 40) {
-                        soundEngine.playError()
-                        resultText = if (lang == Lang.TR) "Yetersiz Altın (40 🪙 gerekir)!" else "Need 40 🪙!"
+                    if (isSpinning || remainingSpins <= 0) {
+                        if (remainingSpins <= 0) soundEngine.playError()
                         return@MenuButton
                     }
-                    isSpinning = true
-                    resultText = null
-                    val winIdx = Random.nextInt(prizesTr.size)
-                    val extraSpins = 5 * 360f
-                    val sliceAngle = 360f / prizesTr.size
-                    val cost = if (isFreeSpin) 0 else 40
-                    targetAngle += extraSpins + (360f - winIdx * sliceAngle)
-
-                    scope.launch {
-                        repeat(10) { delay(240); soundEngine.playWheelTick() }
-                        delay(450)
-                        soundEngine.playLevelWin()
-                        when (winIdx) {
-                            0 -> { onPrizeWon(50 - cost, 0, isFreeSpin); resultText = "🎉 +50 🪙 KAZANDIN!" }
-                            1 -> { onPrizeWon(100 - cost, 0, isFreeSpin); resultText = "🎉 +100 🪙 KAZANDIN!" }
-                            2 -> { onPrizeWon(-cost, 1, isFreeSpin); resultText = "🎉 +1 BEDAVA 🔨 ÇEKİÇ KAZANDIN!" }
-                            3 -> { onPrizeWon(150 - cost, 0, isFreeSpin); resultText = "🎉 +150 🪙 KAZANDIN!" }
-                            4 -> { onPrizeWon(75 - cost, 0, isFreeSpin); resultText = "🎉 +75 🪙 KAZANDIN!" }
-                            else -> { onPrizeWon(250 - cost, 0, isFreeSpin); resultText = "💎 JACKPOT! +250 🪙 KAZANDIN!" }
-                        }
-                        isSpinning = false
+                    soundEngine.playClick()
+                    if (isFirstFreeSpin) {
+                        startSpinAnimation()
+                    } else {
+                        adMobManager.showRewardedAd(
+                            onRewardEarned = { startSpinAnimation() },
+                            onNotReady = {
+                                resultText = if (lang == Lang.TR) "⏳ Reklam yükleniyor, birkaç saniye sonra tekrar bas!" else "⏳ Ad loading, try again in a moment!"
+                            }
+                        )
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -2188,7 +2508,7 @@ fun WordSwipeWheel(
 }
 
 // ==========================================
-// 11. AYARLAR PENCERESI
+// 11. AYARLAR PENCERESI (GIZLILIK POLITIKASI LINKI ILE)
 // ==========================================
 @Composable
 fun SettingsDialog(
@@ -2199,16 +2519,27 @@ fun SettingsDialog(
     onToggleMusic: () -> Unit,
     onToggleSfx: () -> Unit,
     onToggleGraphics: () -> Unit,
+    onOpenPrivacyPolicy: () -> Unit,
     onResetProgress: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF1E293B), border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.25f))) {
-            Column(modifier = Modifier.padding(22.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(modifier = Modifier.padding(22.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(if (lang == Lang.TR) "⚙️ OYUN AYARLARI" else "⚙️ GAME SETTINGS", color = Color.White, fontWeight = FontWeight.Black, fontSize = 19.sp)
                 SettingRow(if (lang == Lang.TR) "🎵 Arka Plan Müziği" else "🎵 Background Music", musicEnabled, onToggleMusic)
                 SettingRow(if (lang == Lang.TR) "🔊 Akustik Harp & Efektler" else "🔊 Sound Effects (SFX)", sfxEnabled, onToggleSfx)
                 SettingRow(if (lang == Lang.TR) "✨ Yüksek Grafik & Animasyon" else "✨ High Graphics", highGraphics, onToggleGraphics)
+
+                TextButton(onClick = onOpenPrivacyPolicy, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = if (lang == Lang.TR) "🔒 Gizlilik Politikası & Aydınlatma Metni" else "🔒 Privacy Policy",
+                        color = Color(0xFF38BDF8),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = onResetProgress) { Text(if (lang == Lang.TR) "İlerlemeyi Sıfırla" else "Reset Save", color = Color(0xFFEF4444), fontSize = 13.sp) }
