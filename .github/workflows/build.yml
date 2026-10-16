@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,7 +22,28 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Gradle 8.7 Kur (Wrapper Gerekmeden)
+      - name: Sabit Imza (Keystore) Kontrol Et ve Olustur
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f "app/fixed-debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore app/fixed-debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add app/fixed-debug.keystore
+            git commit -m "Sabit APK imzasi eklendi"
+            git push
+          fi
+          cp app/fixed-debug.keystore ~/.android/debug.keystore
+
+      - name: Gradle 8.7 Kur
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
