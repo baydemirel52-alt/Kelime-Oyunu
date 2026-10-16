@@ -1,0 +1,13 @@
+Kelime listeleri / Word lists
+
+tr_words.txt, tr_common.txt
+  Kaynak: Zemberek-NLP Turkish lexicon (master-dictionary.dict, non-tdk.dict, top-20K-words.txt)
+  https://github.com/ahmetaa/zemberek-nlp  -  Apache License 2.0
+  Copyright 2018 Ahmet A. Akin, Mehmet D. Akin
+  Degisiklikler: buyuk harfe cevrildi, 2-10 harfli kelimeler secildi, ozel isim/kisaltma ve
+  kufurlu kelimeler cikarildi, fiil kokleri eklendi.
+
+en_words.txt, en_common.txt
+  Kaynak: ENABLE word list (public domain) ve dolph/dictionary popular.txt
+  https://github.com/dolph/dictionary
+  Degisiklikler: buyuk harfe cevrildi, 2-10 harfli kelimeler secildi, kufurlu kelimeler cikarildi.
