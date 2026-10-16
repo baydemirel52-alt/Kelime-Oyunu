@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.media.MediaPlayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -124,11 +125,15 @@ class MainActivity : ComponentActivity() {
 }
 
 // ==========================================
-// 1. YENI NESIL COK KATMANLI HARMONIK SES MOTORU
+// 1. SES MOTORU (GERCEK MP3/OGG + YORMAYAN ZEN AMBIYANS)
 // ==========================================
-class ProceduralSoundEngine {
+class ProceduralSoundEngine(private val appContext: Context) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var musicJob: Job? = null
+    private var mediaPlayer: MediaPlayer? = null
+    private var assetMusicChecked = false
+    private var hasAssetMusic = false
+
     var sfxEnabled = true
     var musicEnabled = true
     var isAppInForeground = true
@@ -138,63 +143,63 @@ class ProceduralSoundEngine {
     fun playClick() {
         if (!sfxEnabled) return
         scope.launch {
-            playHarmonicPluck(480.0, 35, 0.28f)
-            playHarmonicPluck(960.0, 45, 0.22f)
+            playHarmonicPluck(480.0, 35, 0.26f)
+            playHarmonicPluck(960.0, 45, 0.20f)
         }
     }
 
     fun playSwipeNote(index: Int) {
         if (!sfxEnabled) return
         val base = harpScale[index.coerceIn(0, harpScale.lastIndex)]
-        scope.launch { playHarmonicPluck(base, 110, 0.36f) }
+        scope.launch { playHarmonicPluck(base, 110, 0.34f) }
     }
 
     fun playWordSuccess() {
         if (!sfxEnabled) return
         scope.launch {
-            playHarmonicPluck(523.25, 75, 0.35f)
-            playHarmonicPluck(659.25, 75, 0.35f)
-            playHarmonicPluck(783.99, 85, 0.38f)
-            playHarmonicPluck(1046.50, 170, 0.42f)
+            playHarmonicPluck(523.25, 75, 0.34f)
+            playHarmonicPluck(659.25, 75, 0.34f)
+            playHarmonicPluck(783.99, 85, 0.36f)
+            playHarmonicPluck(1046.50, 170, 0.40f)
         }
     }
 
     fun playBonusWord() {
         if (!sfxEnabled) return
         scope.launch {
-            playHarmonicPluck(587.33, 65, 0.35f)
-            playHarmonicPluck(880.00, 90, 0.38f)
-            playHarmonicPluck(1174.66, 150, 0.40f)
+            playHarmonicPluck(587.33, 65, 0.34f)
+            playHarmonicPluck(880.00, 90, 0.36f)
+            playHarmonicPluck(1174.66, 150, 0.38f)
         }
     }
 
     fun playHammerHit() {
         if (!sfxEnabled) return
         scope.launch {
-            playPercussiveImpact(110.0, 95, 0.48f)
-            playHarmonicPluck(880.0, 120, 0.35f)
+            playPercussiveImpact(110.0, 95, 0.46f)
+            playHarmonicPluck(880.0, 120, 0.34f)
         }
     }
 
     fun playWheelTick() {
         if (!sfxEnabled) return
-        scope.launch { playHarmonicPluck(700.0, 28, 0.24f) }
+        scope.launch { playHarmonicPluck(700.0, 28, 0.22f) }
     }
 
     fun playLightningStrike() {
         if (!sfxEnabled) return
         scope.launch {
-            playPercussiveImpact(95.0, 110, 0.5f)
-            playHarmonicPluck(1318.5, 80, 0.4f)
-            playHarmonicPluck(1567.98, 160, 0.42f)
+            playPercussiveImpact(95.0, 110, 0.48f)
+            playHarmonicPluck(1318.5, 80, 0.38f)
+            playHarmonicPluck(1567.98, 160, 0.40f)
         }
     }
 
     fun playError() {
         if (!sfxEnabled) return
         scope.launch {
-            playHarmonicPluck(185.0, 80, 0.32f)
-            playHarmonicPluck(155.0, 130, 0.32f)
+            playHarmonicPluck(185.0, 80, 0.30f)
+            playHarmonicPluck(155.0, 130, 0.30f)
         }
     }
 
@@ -203,23 +208,95 @@ class ProceduralSoundEngine {
         scope.launch {
             val fanfare = doubleArrayOf(523.25, 659.25, 783.99, 1046.50, 987.77, 1046.50)
             for (i in fanfare.indices) {
-                playHarmonicPluck(fanfare[i], if (i == fanfare.lastIndex) 240 else 95, 0.42f)
+                playHarmonicPluck(fanfare[i], if (i == fanfare.lastIndex) 240 else 95, 0.40f)
             }
         }
     }
 
     fun updateBackgroundMusic() {
         musicJob?.cancel()
-        if (!musicEnabled || !isAppInForeground) return
-        musicJob = scope.launch {
-            val bassAndLead = doubleArrayOf(196.00, 293.66, 392.00, 329.63, 220.00, 329.63, 440.00, 392.00)
-            var idx = 0
-            while (isActive && musicEnabled && isAppInForeground) {
-                playHarmonicPluck(bassAndLead[idx % bassAndLead.size], 220, 0.065f)
-                delay(320)
-                idx++
+        if (!musicEnabled || !isAppInForeground) {
+            try {
+                if (mediaPlayer?.isPlaying == true) mediaPlayer?.pause()
+            } catch (_: Exception) {}
+            return
+        }
+
+        // 1. Öncelik: assets/bg_music.mp3 veya bg_music.ogg varsa gerçek ses dosyasını çal!
+        if (!assetMusicChecked) {
+            assetMusicChecked = true
+            val candidates = listOf("bg_music.mp3", "bg_music.ogg", "music.mp3")
+            for (fileName in candidates) {
+                try {
+                    val afd = appContext.assets.openFd(fileName)
+                    val mp = MediaPlayer()
+                    mp.setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_GAME)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build()
+                    )
+                    mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    afd.close()
+                    mp.isLooping = true
+                    mp.setVolume(0.28f, 0.28f)
+                    mp.prepare()
+                    mediaPlayer = mp
+                    hasAssetMusic = true
+                    break
+                } catch (_: Exception) {}
             }
         }
+
+        if (hasAssetMusic && mediaPlayer != null) {
+            try {
+                if (mediaPlayer?.isPlaying == false) mediaPlayer?.start()
+            } catch (_: Exception) {}
+            return
+        }
+
+        // 2. Yedek: Kulağı asla yormayan, nefes aralıklı 16 akorluk yumuşak Zen Ambiyans Pad
+        musicJob = scope.launch {
+            val zenChords = arrayOf(
+                doubleArrayOf(130.81, 196.00, 246.94), // Cmaj7
+                doubleArrayOf(110.00, 164.81, 220.00), // Am7
+                doubleArrayOf(87.31, 130.81, 174.61),  // Fmaj7
+                doubleArrayOf(98.00, 146.83, 196.00),  // G6
+                doubleArrayOf(116.54, 174.61, 220.00), // Dm7
+                doubleArrayOf(110.00, 164.81, 246.94), // Am9
+                doubleArrayOf(87.31, 146.83, 220.00),  // F6/9
+                doubleArrayOf(98.00, 164.81, 246.94)   // Gmaj7
+            )
+            var step = 0
+            while (isActive && musicEnabled && isAppInForeground) {
+                val chord = zenChords[step % zenChords.size]
+                playAmbientPadChord(chord[0], chord[1], chord[2], 2400, 0.032f)
+                // Akorlar arası dinlendirici sessizlik
+                delay(2200)
+                step++
+            }
+        }
+    }
+
+    private suspend fun playAmbientPadChord(f1: Double, f2: Double, f3: Double, durationMs: Int, volume: Float) = withContext(Dispatchers.IO) {
+        try {
+            val sampleRate = 22050
+            val numSamples = (durationMs * sampleRate) / 1000
+            val samples = ShortArray(numSamples)
+            for (i in 0 until numSamples) {
+                val t = i.toDouble() / sampleRate
+                val progress = i.toDouble() / numSamples
+                // Yumuşak fade-in ve fade-out zarfı (tık sesi veya sert giriş yapmaz)
+                val env = sin(PI * progress)
+                val w1 = sin(2.0 * PI * f1 * t)
+                val w2 = 0.7 * sin(2.0 * PI * f2 * t)
+                val w3 = 0.5 * sin(2.0 * PI * f3 * t)
+                val wave = (w1 + w2 + w3) / 2.2
+                samples[i] = (wave * Short.MAX_VALUE * volume * env).toInt()
+                    .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            }
+            writeAndPlayTrack(samples, sampleRate, durationMs)
+        } catch (_: Exception) {}
     }
 
     private suspend fun playHarmonicPluck(freqHz: Double, durationMs: Int, volume: Float) = withContext(Dispatchers.IO) {
@@ -395,10 +472,10 @@ val TR_WORDS_TIER_5 = listOf("KAHRAMAN", "TEKERLEK", "KARANFİL", "ŞAMPİYON", 
 
 val TR_WORDS_ADVANCED = """
 MASAL KAYIK YATAK TABAK KABAK SOKAK LİMAN ZAMAN SAMAN KEMİK DEMİR ŞEHİR NEHİR ZEHİR FİKİR ŞÜKÜR BAKIR ÇAKIR SABIR SATIR
-KATIR ÇADIR KADIN YARIN KARIN FIRIN BURUN TORUN SORUN BOYUN KOYUN SABUN YOSUN KAVUN DAVUL BAVUL KABUL KURAL KURAK DURAK
+KATIR ÇADIR KADIN YARIN KARIN BURUN TORUN SORUN BOYUN KOYUN SABUN YOSUN KAVUN DAVUL BAVUL KABUL KURAL KURAK DURAK
 ÇIRAK MERAK SICAK TABAN TAVAN KAVAN KAZAN SAZAN YAZAR PAZAR HAZAR KARAR ZARAR DAMAR ÇINAR PINAR KENAR FENER KEMER SEMER
 BİBER HABER ŞEKER DEĞER KADER KEDER SEFER ZAFER NEFES KAFES HEVES ADRES TERAS MAKAS TAKAS SAVAŞ YAVAŞ TIRAŞ KUMAŞ YAMAÇ
-ÇEKİÇ BARIŞ YARIŞ KARIŞ ALKIŞ BAKIŞ YAKIŞ ÇIKIŞ NAKIŞ SATIŞ YATIŞ KAÇIŞ DİKİŞ GİRİŞ VERİŞ GELİŞ BİLİŞ GÖRÜŞ DÖNÜŞ GÜLÜŞ
+ÇEKİÇ BARIŞ YARIŞ KARIŞ ALKIŞ BAKIŞ YAKIŞ ÇIKIŞ NAKIŞ SATIŞ YATIŞ KAÇIŞ DİKİŞ GİRİŞ VERİŞ GELİŞ BİLİŞ GÖRÜŞ DÖNÜŞ
 YORGAN HAYVAN ZİNDAN DESTEK GÖMLEK ÇELENK BÖBREK ŞİMŞEK LEYLEK SÖZLÜK GÖZLÜK TOPRAK YAPRAK BAYRAK KAYNAK BARDAK PARMAK SALKIM YARDIM KAVRUK
 SAVRUK KUVVET DEVLET SERVET ŞEFKAT DİKKAT SOHBET GURBET HASRET KISMET HİZMET HİKMET ZAHMET RAHMET MERKEZ HERKES KELEBEK SEÇENEK YETENEK TENCERE
 PENCERE DEMİRCİ BALIKÇI EKMEKÇİ SİMİTÇİ EĞİTİMCİ ÖĞRETMEN MÜHENDİS MİMARLIK CUMHURİYET
@@ -723,7 +800,15 @@ enum class Screen { MENU, GAME }
 fun WordGameApp(onExitApp: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("kelime_efsanesi_prefs", Context.MODE_PRIVATE) }
-    val soundEngine = remember { ProceduralSoundEngine() }
+    val soundEngine = remember { ProceduralSoundEngine(context.applicationContext) }
+
+    val appVersionName = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1"
+        } catch (_: Exception) {
+            "2.1"
+        }
+    }
 
     val defaultLangCode = remember { if (Locale.getDefault().language.lowercase().startsWith("tr")) "tr" else "en" }
     var lang by remember { mutableStateOf(if ((prefs.getString("lang", defaultLangCode) ?: defaultLangCode) == "tr") Lang.TR else Lang.EN) }
@@ -793,6 +878,7 @@ fun WordGameApp(onExitApp: () -> Unit) {
                     lang = lang,
                     level = currentLevel,
                     gold = gold,
+                    versionName = appVersionName,
                     worldTheme = worldTheme,
                     onToggleLang = {
                         soundEngine.playClick()
@@ -974,13 +1060,14 @@ fun ConfettiEffectOverlay() {
 }
 
 // ==========================================
-// 7. ANA MENU EKRANI (SANS CARKI & MUZE INSAATI ILE)
+// 7. ANA MENU EKRANI
 // ==========================================
 @Composable
 fun MainMenuScreen(
     lang: Lang,
     level: Int,
     gold: Int,
+    versionName: String,
     worldTheme: WorldTheme,
     onToggleLang: () -> Unit,
     onStartGame: () -> Unit,
@@ -1070,7 +1157,7 @@ fun MainMenuScreen(
             MenuButton(if (lang == Lang.TR) "🚪  ÇIKIŞ YAP" else "🚪  EXIT GAME", listOf(Color(0xFFEF4444), Color(0xFFB91C1C)), 48.dp, 15, onExit)
         }
 
-        Text("Galaxy Store Edition • v2.1 (Tam Paket)", color = Color.White.copy(alpha = 0.35f), fontSize = 11.sp)
+        Text("Galaxy Store & Play Edition • v$versionName", color = Color.White.copy(alpha = 0.35f), fontSize = 11.sp)
     }
 }
 
