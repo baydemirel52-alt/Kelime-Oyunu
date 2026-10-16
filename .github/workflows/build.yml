@@ -1,12 +1,9 @@
-name: Android APK Build
+name: Android Release Build
 
 on:
   push:
     branches: [ "main", "master" ]
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -22,37 +19,37 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Sabit Imza (Keystore) Kontrol Et ve Olustur
+      - name: Gizli Release Keystore Hazirla (GitHub Secrets)
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          mkdir -p ~/.android
-          if [ ! -f "app/fixed-debug.keystore" ]; then
-            keytool -genkeypair -v \
-              -keystore app/fixed-debug.keystore \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add app/fixed-debug.keystore
-            git commit -m "Sabit APK imzasi eklendi"
-            git push
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
+            echo "Gizli Release imzasi basariyla yuklendi."
+          else
+            echo "Uyari: Gizli imza henuz eklenmemis, gecici imza kullaniliyor."
           fi
-          cp app/fixed-debug.keystore ~/.android/debug.keystore
 
-      - name: Gradle 8.7 Kur
+      - name: Gradle 8.10.2 Kur
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: '8.10.2'
 
-      - name: Debug APK Derle
-        run: gradle assembleDebug --stacktrace
+      - name: Magaza Icin Release APK ve AAB Derle
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: gradle assembleRelease bundleRelease --stacktrace
 
-      - name: APK Dosyasini Yukle
+      - name: Samsung Store Release APK Yukle
         uses: actions/upload-artifact@v4
         with:
-          name: Kelime-Efsanesi-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Kelime-Efsanesi-Release-APK
+          path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Google Play Release AAB Yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kelime-Efsanesi-GooglePlay-AAB
+          path: app/build/outputs/bundle/release/app-release.aab
