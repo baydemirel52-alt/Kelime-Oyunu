@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // ==========================================
-// 1. TELİFSİZ PROSEDÜREL SES MOTORU (SYNTH)
+// 1. YENİ NESİL ÇOK KATMANLI HARMONİK SES MOTORU
 // ==========================================
 class ProceduralSoundEngine {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -65,41 +65,81 @@ class ProceduralSoundEngine {
     var sfxEnabled = true
     var musicEnabled = true
     var isAppInForeground = true
-    private val swipeNotes = doubleArrayOf(523.25, 587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50)
 
-    fun playClick() { if (sfxEnabled) playTone(620.0, 45, 0.25f) }
-    fun playSwipeNote(index: Int) { if (sfxEnabled) playTone(swipeNotes[index.coerceIn(0, swipeNotes.lastIndex)], 70, 0.3f) }
-    fun playError() { if (sfxEnabled) playTone(190.0, 120, 0.25f) }
+    // Akustik Arp / Marimba Gamı (C Majör 9 Harmonik Dizi)
+    private val harpScale = doubleArrayOf(261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99)
+
+    fun playClick() {
+        if (!sfxEnabled) return
+        // Tok ahşap/kristal çift tonlu buton sesi
+        scope.launch {
+            playHarmonicPluck(480.0, 35, 0.28f)
+            playHarmonicPluck(960.0, 45, 0.22f)
+        }
+    }
+
+    fun playSwipeNote(index: Int) {
+        if (!sfxEnabled) return
+        val base = harpScale[index.coerceIn(0, harpScale.lastIndex)]
+        scope.launch { playHarmonicPluck(base, 110, 0.36f) }
+    }
 
     fun playWordSuccess() {
         if (!sfxEnabled) return
-        scope.launch { playToneSync(523.25, 70, 0.3f); playToneSync(659.25, 70, 0.3f); playToneSync(783.99, 125, 0.35f) }
+        scope.launch {
+            playHarmonicPluck(523.25, 75, 0.35f)
+            playHarmonicPluck(659.25, 75, 0.35f)
+            playHarmonicPluck(783.99, 85, 0.38f)
+            playHarmonicPluck(1046.50, 170, 0.42f)
+        }
     }
 
     fun playBonusWord() {
         if (!sfxEnabled) return
-        scope.launch { playToneSync(587.33, 65, 0.3f); playToneSync(880.00, 120, 0.35f) }
+        scope.launch {
+            playHarmonicPluck(587.33, 65, 0.35f)
+            playHarmonicPluck(880.00, 90, 0.38f)
+            playHarmonicPluck(1174.66, 150, 0.40f)
+        }
     }
 
     fun playHammerHit() {
         if (!sfxEnabled) return
-        scope.launch { playToneSync(180.0, 60, 0.4f); playToneSync(740.0, 110, 0.35f) }
+        scope.launch {
+            playPercussiveImpact(110.0, 95, 0.48f)
+            playHarmonicPluck(880.0, 120, 0.35f)
+        }
+    }
+
+    fun playWheelTick() {
+        if (!sfxEnabled) return
+        scope.launch { playHarmonicPluck(700.0, 28, 0.24f) }
     }
 
     fun playLightningStrike() {
         if (!sfxEnabled) return
-        scope.launch { playToneSync(1174.66, 55, 0.38f); playToneSync(880.0, 55, 0.38f); playToneSync(1567.98, 140, 0.4f) }
+        scope.launch {
+            playPercussiveImpact(95.0, 110, 0.5f)
+            playHarmonicPluck(1318.5, 80, 0.4f)
+            playHarmonicPluck(1567.98, 160, 0.42f)
+        }
     }
 
-    fun playSealBreak() {
+    fun playError() {
         if (!sfxEnabled) return
-        scope.launch { playToneSync(329.63, 80, 0.35f); playToneSync(440.0, 80, 0.35f); playToneSync(659.25, 150, 0.4f) }
+        scope.launch {
+            playHarmonicPluck(185.0, 80, 0.32f)
+            playHarmonicPluck(155.0, 130, 0.32f)
+        }
     }
 
     fun playLevelWin() {
         if (!sfxEnabled) return
         scope.launch {
-            for (n in doubleArrayOf(523.25, 659.25, 783.99, 1046.50, 1318.50)) playToneSync(n, 105, 0.36f)
+            val fanfare = doubleArrayOf(523.25, 659.25, 783.99, 1046.50, 987.77, 1046.50)
+            for (i in fanfare.indices) {
+                playHarmonicPluck(fanfare[i], if (i == fanfare.lastIndex) 240 else 95, 0.42f)
+            }
         }
     }
 
@@ -107,75 +147,129 @@ class ProceduralSoundEngine {
         musicJob?.cancel()
         if (!musicEnabled || !isAppInForeground) return
         musicJob = scope.launch {
-            val melody = doubleArrayOf(261.63, 293.66, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66)
+            // Ritmik bas + arp yürüyüşlü telifsiz oyun müziği
+            val bassAndLead = doubleArrayOf(196.00, 293.66, 392.00, 329.63, 220.00, 329.63, 440.00, 392.00)
             var idx = 0
             while (isActive && musicEnabled && isAppInForeground) {
-                playToneSync(melody[idx % melody.size], 280, 0.055f)
-                delay(420)
+                playHarmonicPluck(bassAndLead[idx % bassAndLead.size], 220, 0.065f)
+                delay(320)
                 idx++
             }
         }
     }
 
-    private fun playTone(freqHz: Double, durationMs: Int, volume: Float) { scope.launch { playToneSync(freqHz, durationMs, volume) } }
-
-    private suspend fun playToneSync(freqHz: Double, durationMs: Int, volume: Float) = withContext(Dispatchers.IO) {
+    // Zengin Harmonik Sentezleyici (Temel Frekans + 5'li Akor + Oktav + Akustik Sönümlenme)
+    private suspend fun playHarmonicPluck(freqHz: Double, durationMs: Int, volume: Float) = withContext(Dispatchers.IO) {
         try {
             val sampleRate = 22050
             val numSamples = (durationMs * sampleRate) / 1000
             val samples = ShortArray(numSamples)
             for (i in 0 until numSamples) {
-                val angle = 2.0 * PI * i / (sampleRate / freqHz)
-                val env = when {
-                    i < numSamples * 0.1 -> i / (numSamples * 0.1)
-                    i > numSamples * 0.7 -> (numSamples - i) / (numSamples * 0.3)
-                    else -> 1.0
-                }
-                samples[i] = (sin(angle) * Short.MAX_VALUE * volume * env).toInt().toShort()
+                val t = i.toDouble() / sampleRate
+                val env = exp(-4.5 * i.toDouble() / numSamples) * (if (i < 60) i / 60.0 else 1.0)
+                val fundamental = sin(2.0 * PI * freqHz * t)
+                val fifth = 0.35 * sin(2.0 * PI * (freqHz * 1.498) * t)
+                val octave = 0.25 * sin(2.0 * PI * (freqHz * 2.0) * t)
+                val wave = (fundamental + fifth + octave) / 1.6
+                samples[i] = (wave * Short.MAX_VALUE * volume * env).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
             }
-            val track = AudioTrack.Builder()
-                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-                .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(sampleRate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-                .setBufferSizeInBytes(samples.size * 2)
-                .setTransferMode(AudioTrack.MODE_STATIC)
-                .build()
-            track.write(samples, 0, samples.size)
-            track.play()
-            delay(durationMs.toLong() + 20)
-            track.stop()
-            track.release()
+            writeAndPlayTrack(samples, sampleRate, durationMs)
         } catch (_: Exception) {}
+    }
+
+    // Çekiç & Şimşek İçin Tok Darbe Sentezleyici
+    private suspend fun playPercussiveImpact(baseFreq: Double, durationMs: Int, volume: Float) = withContext(Dispatchers.IO) {
+        try {
+            val sampleRate = 22050
+            val numSamples = (durationMs * sampleRate) / 1000
+            val samples = ShortArray(numSamples)
+            val rng = Random(42)
+            for (i in 0 until numSamples) {
+                val t = i.toDouble() / sampleRate
+                val env = exp(-8.0 * i.toDouble() / numSamples)
+                val punch = sin(2.0 * PI * baseFreq * t)
+                val crunch = (rng.nextDouble() * 2.0 - 1.0) * 0.4
+                samples[i] = ((punch + crunch) * 0.7 * Short.MAX_VALUE * volume * env).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            }
+            writeAndPlayTrack(samples, sampleRate, durationMs)
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun writeAndPlayTrack(samples: ShortArray, sampleRate: Int, durationMs: Int) {
+        val track = AudioTrack.Builder()
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(sampleRate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+            .setBufferSizeInBytes(samples.size * 2)
+            .setTransferMode(AudioTrack.MODE_STATIC)
+            .build()
+        track.write(samples, 0, samples.size)
+        track.play()
+        delay(durationMs.toLong() + 15)
+        track.stop()
+        track.release()
     }
 }
 
 // ==========================================
-// 2. DÜNYA TEMALARI, TARİH, DOPİNG & LİGLER
+// 2. DÜNYA TEMALARI, MÜZE ESERLERİ & SÖZLÜK ANLAMLARI
 // ==========================================
 enum class Lang(val code: String, val flag: String, val label: String) { TR("tr", "🇹🇷", "TR"), EN("en", "🇬🇧", "EN") }
 
 data class WorldTheme(
     val zoneIndex: Int, val regionNameTr: String, val regionNameEn: String,
-    val bossTitleTr: String, val bossTitleEn: String,
+    val monumentNameTr: String, val bossTitleTr: String, val bossTitleEn: String,
     val bgGradient: List<Color>, val accentColor: Color, val openTileGradient: List<Color>
 )
 
 fun getWorldThemeForLevel(level: Int): WorldTheme = when (((level - 1) / 10) % 10) {
-    0 -> WorldTheme(0, "Göbeklitepe Vadisi", "Göbeklitepe Valley", "🗿 Göbeklitepe Muhafızı", "🗿 Guardian of Göbeklitepe", listOf(Color(0xFF1C140D), Color(0xFF3B2314), Color(0xFF24130B)), Color(0xFFF59E0B), listOf(Color(0xFFD97706), Color(0xFFB45309)))
-    1 -> WorldTheme(1, "Ayasofya Meydanı", "Hagia Sophia Square", "⚔️ Ayasofya Muhafızı", "⚔️ Guardian of Hagia Sophia", listOf(Color(0xFF1F0916), Color(0xFF3F1028), Color(0xFF230A34)), Color(0xFFF43F5E), listOf(Color(0xFFE11D48), Color(0xFF9F1239)))
-    2 -> WorldTheme(2, "Efes Antik Kenti", "Ancient Ephesus", "🏛️ Celsus Muhafızı", "🏛️ Guardian of Ephesus", listOf(Color(0xFF061A2E), Color(0xFF0C365A), Color(0xFF08223A)), Color(0xFF38BDF8), listOf(Color(0xFF0284C7), Color(0xFF0369A1)))
-    3 -> WorldTheme(3, "Galata & Boğaz Gecesi", "Galata Midnight", "🦅 Galata Muhafızı", "🦅 Guardian of Galata", listOf(Color(0xFF0B1120), Color(0xFF1E1B4B), Color(0xFF311042)), Color(0xFFA855F7), listOf(Color(0xFF7C3AED), Color(0xFF5B21B6)))
-    4 -> WorldTheme(4, "Giza Piramitleri", "Pyramids of Giza", "👑 Firavun Muhafızı", "👑 Pharaoh Guardian", listOf(Color(0xFF221A09), Color(0xFF42300E), Color(0xFF1C1306)), Color(0xFFFBBF24), listOf(Color(0xFFCA8A04), Color(0xFF854D0E)))
-    5 -> WorldTheme(5, "Roma Kolezyumu", "Roman Colosseum", "🛡️ Gladyatör Muhafızı", "🛡️ Gladiator Guardian", listOf(Color(0xFF230C0C), Color(0xFF451A1A), Color(0xFF1A0B12)), Color(0xFFFB923C), listOf(Color(0xFFEA580C), Color(0xFF9A3412)))
-    6 -> WorldTheme(6, "Sümela Zümrüt Ormanı", "Sumela Emerald Forest", "🌲 Karadağ Muhafızı", "🌲 Guardian of Sumela", listOf(Color(0xFF051F18), Color(0xFF0B3B2D), Color(0xFF072227)), Color(0xFF34D399), listOf(Color(0xFF10B981), Color(0xFF047857)))
-    7 -> WorldTheme(7, "Tac Mahal Sarayı", "Taj Mahal Palace", "💎 Babür Muhafızı", "💎 Taj Mahal Guardian", listOf(Color(0xFF161130), Color(0xFF2D1B4E), Color(0xFF3B1239)), Color(0xFFF472B6), listOf(Color(0xFFDB2777), Color(0xFF9D174D)))
-    8 -> WorldTheme(8, "Nemrut Dağı Zirvesi", "Mount Nemrut Peak", "☀️ Kommagene Muhafızı", "☀️ Guardian of Nemrut", listOf(Color(0xFF181124), Color(0xFF331D4A), Color(0xFF421C24)), Color(0xFFFBBF24), listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)))
-    else -> WorldTheme(9, "Machu Picchu Bulutları", "Clouds of Machu Picchu", "🏔️ İnka Muhafızı", "🏔️ Incan Guardian", listOf(Color(0xFF071E22), Color(0xFF113F46), Color(0xFF092327)), Color(0xFF2DD4BF), listOf(Color(0xFF0D9488), Color(0xFF115E59)))
+    0 -> WorldTheme(0, "Göbeklitepe Vadisi", "Göbeklitepe Valley", "Göbeklitepe T-Dikilitaşı", "🗿 Göbeklitepe Muhafızı", "🗿 Guardian of Göbeklitepe", listOf(Color(0xFF1C140D), Color(0xFF3B2314), Color(0xFF24130B)), Color(0xFFF59E0B), listOf(Color(0xFFD97706), Color(0xFFB45309)))
+    1 -> WorldTheme(1, "Ayasofya Meydanı", "Hagia Sophia Square", "Ayasofya Büyük Kubbesi", "⚔️ Ayasofya Muhafızı", "⚔️ Guardian of Hagia Sophia", listOf(Color(0xFF1F0916), Color(0xFF3F1028), Color(0xFF230A34)), Color(0xFFF43F5E), listOf(Color(0xFFE11D48), Color(0xFF9F1239)))
+    2 -> WorldTheme(2, "Efes Antik Kenti", "Ancient Ephesus", "Celsus Mermer Cephesi", "🏛️ Celsus Muhafızı", "🏛️ Guardian of Ephesus", listOf(Color(0xFF061A2E), Color(0xFF0C365A), Color(0xFF08223A)), Color(0xFF38BDF8), listOf(Color(0xFF0284C7), Color(0xFF0369A1)))
+    3 -> WorldTheme(3, "Galata & Boğaz Gecesi", "Galata Midnight", "Galata Kulesi Külahı", "🦅 Galata Muhafızı", "🦅 Guardian of Galata", listOf(Color(0xFF0B1120), Color(0xFF1E1B4B), Color(0xFF311042)), Color(0xFFA855F7), listOf(Color(0xFF7C3AED), Color(0xFF5B21B6)))
+    4 -> WorldTheme(4, "Giza Piramitleri", "Pyramids of Giza", "Keops Altın Piramidi", "👑 Firavun Muhafızı", "👑 Pharaoh Guardian", listOf(Color(0xFF221A09), Color(0xFF42300E), Color(0xFF1C1306)), Color(0xFFFBBF24), listOf(Color(0xFFCA8A04), Color(0xFF854D0E)))
+    5 -> WorldTheme(5, "Roma Kolezyumu", "Roman Colosseum", "Kolezyum Kemerleri", "🛡️ Gladyatör Muhafızı", "🛡️ Gladiator Guardian", listOf(Color(0xFF230C0C), Color(0xFF451A1A), Color(0xFF1A0B12)), Color(0xFFFB923C), listOf(Color(0xFFEA580C), Color(0xFF9A3412)))
+    6 -> WorldTheme(6, "Sümela Zümrüt Ormanı", "Sumela Emerald Forest", "Sümela Kaya Mabedi", "🌲 Karadağ Muhafızı", "🌲 Guardian of Sumela", listOf(Color(0xFF051F18), Color(0xFF0B3B2D), Color(0xFF072227)), Color(0xFF34D399), listOf(Color(0xFF10B981), Color(0xFF047857)))
+    7 -> WorldTheme(7, "Tac Mahal Sarayı", "Taj Mahal Palace", "Tac Mahal Mermer Sarayı", "💎 Babür Muhafızı", "💎 Taj Mahal Guardian", listOf(Color(0xFF161130), Color(0xFF2D1B4E), Color(0xFF3B1239)), Color(0xFFF472B6), listOf(Color(0xFFDB2777), Color(0xFF9D174D)))
+    8 -> WorldTheme(8, "Nemrut Dağı Zirvesi", "Mount Nemrut Peak", "Nemrut Kral Heykelleri", "☀️ Kommagene Muhafızı", "☀️ Guardian of Nemrut", listOf(Color(0xFF181124), Color(0xFF331D4A), Color(0xFF421C24)), Color(0xFFFBBF24), listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)))
+    else -> WorldTheme(9, "Machu Picchu Bulutları", "Clouds of Machu Picchu", "İnka Güneş Tapınağı", "🏔️ İnka Muhafızı", "🏔️ Incan Guardian", listOf(Color(0xFF071E22), Color(0xFF113F46), Color(0xFF092327)), Color(0xFF2DD4BF), listOf(Color(0xFF0D9488), Color(0xFF115E59)))
 }
 
 val PRAISE_WORDS_TR = listOf("🔥 HARİKASIN!", "⚡ MUHTEŞEMSİN!", "👑 ZEKA KÜPÜ!", "🚀 DURDURULAMAZSIN!", "💎 EFSANE ÇÖZÜM!", "🌟 SÜPERSİN!", "🎯 TAM İSABET!", "💥 ŞOV YAPIYORSUN!")
 val PRAISE_WORDS_EN = listOf("🔥 AWESOME!", "⚡ MAGNIFICENT!", "👑 GENIUS MOVE!", "🚀 UNSTOPPABLE!", "💎 LEGENDARY!", "🌟 SUPERB!", "🎯 BULLSEYE!")
 val LEVEL_WIN_PRAISE_TR = listOf("🏆 MUHTEŞEMSİN! BÖLÜMÜ YIKTIN GEÇTİN!", "🔥 HARİKASIN! ZEKA ŞOV YAPTIN!", "👑 EFSANESİN! KİMSE SENİ TUTAMAZ!", "⚡ OLAĞANÜSTÜ! BEYİN FIRTINASI ESTİRDİN!", "💎 ŞAMPİYON GİBİ ÇÖZDÜN, HELAL OLSUN!")
-val LEVEL_WIN_PRAISE_EN = listOf("🏆 MAGNIFICENT! YOU CRUSHED THIS LEVEL!", "🔥 AWESOME! PURE GENIUS DISPLAY!", "👑 LEGENDARY! NOTHING CAN STOP YOU!", "⚡ BRILLIANT! WHAT A BRAINSTORM!")
+val LEVEL_WIN_PRAISE_EN = listOf("🏆 MAGNIFICENT! YOU CRUSHED THIS LEVEL!", "🔥 AWESOME! PURE GENIUS DISPLAY!", "👑 LEGENDARY! NOTHING CAN STOP YOU!")
+
+// Mini Sözlük Açıklama Motoru
+val WORD_MEANINGS_TR = mapOf(
+    "BAL" to "Arıların çiçek özlerinden yaptığı tatlı, şifalı besin.",
+    "KALE" to "Düşman saldırılarına karşı kalın surlarla çevrili tarihi savunma yapısı.",
+    "MASA" to "Ayakları üzerine oturtulmuş düz yüzeyli mobilya.",
+    "KAYA" to "Yerkabuğunu oluşturan büyük ve sert taş kütlesi.",
+    "SIRA" to "Arka arkaya veya yan yana dizilmiş şeylerin bütünü; düzen.",
+    "KAPI" to "Bir yere girip çıkarken geçilen açılır kapanır bölme.",
+    "YURT" to "Bir halkın üzerinde yaşadığı, kültürünü oluşturduğu toprak; vatan.",
+    "RENK" to "Işığın göz retinasına ulaşmasıyla oluşan görsel algı.",
+    "DOST" to "Güvenilen, sevilen yakın arkadaş, gönüldaş.",
+    "ARKA" to "Bir şeyin temel tutulan yüzünün tam tersi olan taraf; geri.",
+    "KALEM" to "Yazma veya çizme işlerinde kullanılan araç.",
+    "KİTAP" to "Ciltlenmiş basılı veya yazılı sayfalar bütünü, eser.",
+    "TAKİP" to "Bir kimsenin veya olayın izini sürme, ardı sıra gitme.",
+    "PATİK" to "Özellikle bebekler veya ev içi kullanım için örülen kısa ayak giysisi.",
+    "KATİ" to "Kesin, şüphesiz, tereddüt bırakmayan.",
+    "PAK" to "Çok temiz, arınmış, lekesiz.",
+    "DENİZ" to "Yeryüzünün çukur bölümlerini dolduran büyük tuzlu su kütlesi.",
+    "TARİH" to "Geçmişteki olayları yer ve zaman göstererek inceleyen bilim dalı.",
+    "SEVGİ" to "İnsanı bir şeye veya bir kimseye yakın ilgi göstermeye yönelten duygu.",
+    "BAHAR" to "Kış ile yaz arasındaki doğanın canlandığı ılıman mevsim.",
+    "GÜNEŞ" to "Dünyamızı ısıtan ve aydınlatan sistemimizin merkez yıldızı.",
+    "ORMAN" to "Ağaçlarla ve doğal bitki örtüsüyle kaplı geniş yeşil alan."
+)
+
+fun getWordMeaning(word: String, lang: Lang): String {
+    if (lang == Lang.EN) return "English vocabulary word (${word.length} letters) — Score value: ${word.length * 15} pts."
+    return WORD_MEANINGS_TR[word]
+        ?: "Türkçe sözlükte yer alan ${word.length} harfli anlamlı kelime. (Harf Değeri: ${word.length * 15} Puan)"
+}
 
 data class HistoricalFact(val levelMilestone: Int, val titleTr: String, val infoTr: String, val titleEn: String, val infoEn: String)
 
@@ -311,7 +405,7 @@ fun canFormWordFromWheel(wheelLetters: String, candidate: String): Boolean {
 }
 
 // ==========================================
-// 4. BULMACA & BOSS MÜHÜR ÜRETİCİSİ
+// 4. BULMACA, KELEBEK, SİS & BOSS ÜRETİCİSİ
 // ==========================================
 data class PlacedWord(val word: String, val row: Int, val col: Int, val isHorizontal: Boolean)
 
@@ -319,7 +413,10 @@ data class LevelPuzzle(
     val level: Int, val wheelLetters: List<Char>, val placedWords: List<PlacedWord>,
     val bonusWords: Set<String>, val gridRows: Int, val gridCols: Int,
     val isTimeAttack: Boolean, val timeLimitSec: Int,
-    val isBossLevel: Boolean, val initialSealedWheelIndex: Int?
+    val isBossLevel: Boolean, val initialSealedWheelIndex: Int?,
+    val butterflyCells: Set<Pair<Int, Int>>,
+    val goldCells: Set<Pair<Int, Int>>,
+    val fogCells: Set<Pair<Int, Int>>
 )
 
 fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
@@ -369,9 +466,7 @@ fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
                         val r = if (tryH) pw.row + j else pw.row - i
                         val c = if (tryH) pw.col - i else pw.col + j
                         if (canPlaceWord(grid, w, r, c, tryH)) {
-                            for (k in w.indices) {
-                                grid[if (tryH) r else r + k][if (tryH) c + k else c] = w[k]
-                            }
+                            for (k in w.indices) grid[if (tryH) r else r + k][if (tryH) c + k else c] = w[k]
                             placed.add(PlacedWord(w, r, c, tryH))
                             isPlaced = true
                             break@outer
@@ -407,7 +502,21 @@ fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
     var wheelChars = mainWord.toList().shuffled(rng)
     if (wheelChars.joinToString("") == mainWord && mainWord.length > 2) wheelChars = wheelChars.reversed()
 
-    val isBossLevel = (level % 10 == 0)
+    // Tablodaki tüm koordinatları topla ve her bölümde Kelebek, Altın ve Gizemli Sis yerleştir!
+    val allCoords = mutableListOf<Pair<Int, Int>>()
+    for (pw in normalizedPlaced) {
+        for (k in pw.word.indices) {
+            val pos = (if (pw.isHorizontal) pw.row else pw.row + k) to (if (pw.isHorizontal) pw.col + k else pw.col)
+            if (pos !in allCoords) allCoords.add(pos)
+        }
+    }
+    val shuffledCoords = allCoords.shuffled(rng)
+    val butterflySet = if (level >= 2 && shuffledCoords.isNotEmpty()) setOf(shuffledCoords[0]) else emptySet()
+    val goldSet = if (level >= 2 && shuffledCoords.size >= 3) setOf(shuffledCoords[1], shuffledCoords[2]) else emptySet()
+    val fogSet = if (level >= 3 && shuffledCoords.size >= 5) setOf(shuffledCoords[3], shuffledCoords[4]) else emptySet()
+
+    // Her 5 seviyede bir Boss Muhafızı!
+    val isBossLevel = (level % 5 == 0)
     var sealedIdx: Int? = null
     if (isBossLevel) {
         for (candidateIdx in wheelChars.indices) {
@@ -419,13 +528,14 @@ fun generateLevelPuzzle(level: Int, lang: Lang): LevelPuzzle {
         }
     }
 
-    val isTimeAttack = (level % 15 == 0) && !isBossLevel
+    val isTimeAttack = (level % 7 == 0) && !isBossLevel
     val timeLimit = if (isTimeAttack) (45 + normalizedPlaced.size * 8) else 0
 
     return LevelPuzzle(
         level, wheelChars, normalizedPlaced, bonusSet,
         (maxR - minR + 1).coerceAtLeast(1), (maxC - minC + 1).coerceAtLeast(1),
-        isTimeAttack, timeLimit, isBossLevel, sealedIdx
+        isTimeAttack, timeLimit, isBossLevel, sealedIdx,
+        butterflySet, goldSet, fogSet
     )
 }
 
@@ -471,22 +581,25 @@ fun WordGameApp(onExitApp: () -> Unit) {
     val defaultLangCode = remember { if (Locale.getDefault().language.lowercase().startsWith("tr")) "tr" else "en" }
     var lang by remember { mutableStateOf(if ((prefs.getString("lang", defaultLangCode) ?: defaultLangCode) == "tr") Lang.TR else Lang.EN) }
     var currentLevel by remember { mutableIntStateOf(prefs.getInt("level", 1).coerceIn(1, 300)) }
-    var gold by remember { mutableIntStateOf(prefs.getInt("gold", 150)) }
+    var gold by remember { mutableIntStateOf(prefs.getInt("gold", 200)) }
     var bonusJarCount by remember { mutableIntStateOf(prefs.getInt("bonus_jar", 0).coerceIn(0, 4)) }
+    var freeHammers by remember { mutableIntStateOf(prefs.getInt("free_hammers", 1)) }
     var musicEnabled by remember { mutableStateOf(prefs.getBoolean("music", true)) }
     var sfxEnabled by remember { mutableStateOf(prefs.getBoolean("sfx", true)) }
     var highGraphics by remember { mutableStateOf(prefs.getBoolean("graphics", true)) }
-    var lastDailyDay by remember { mutableIntStateOf(prefs.getInt("daily_day", -1)) }
+    var lastSpinDay by remember { mutableIntStateOf(prefs.getInt("spin_day", -1)) }
 
     var screen by remember { mutableStateOf(Screen.MENU) }
     var showSettings by remember { mutableStateOf(false) }
-    var showHistoryBook by remember { mutableStateOf(false) }
+    var showMuseumDialog by remember { mutableStateOf(false) }
+    var showSpinWheelDialog by remember { mutableStateOf(false) }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
 
     fun saveState() {
         prefs.edit().putString("lang", lang.code).putInt("level", currentLevel).putInt("gold", gold)
-            .putInt("bonus_jar", bonusJarCount).putBoolean("music", musicEnabled)
-            .putBoolean("sfx", sfxEnabled).putBoolean("graphics", highGraphics).putInt("daily_day", lastDailyDay).apply()
+            .putInt("bonus_jar", bonusJarCount).putInt("free_hammers", freeHammers)
+            .putBoolean("music", musicEnabled).putBoolean("sfx", sfxEnabled)
+            .putBoolean("graphics", highGraphics).putInt("spin_day", lastSpinDay).apply()
     }
 
     LaunchedEffect(musicEnabled, sfxEnabled) {
@@ -520,18 +633,8 @@ fun WordGameApp(onExitApp: () -> Unit) {
                     lang = lang, level = currentLevel, gold = gold, worldTheme = worldTheme,
                     onToggleLang = { soundEngine.playClick(); lang = if (lang == Lang.TR) Lang.EN else Lang.TR; saveState() },
                     onStartGame = { soundEngine.playClick(); screen = Screen.GAME },
-                    onDailyReward = {
-                        soundEngine.playClick()
-                        val today = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)).toInt()
-                        if (lastDailyDay != today) {
-                            lastDailyDay = today; gold += 75; saveState(); soundEngine.playLevelWin()
-                            bannerMessage = if (lang == Lang.TR) "🎁 Günlük Ödül: +75 Altın Kazandın!" else "🎁 Daily Bonus: +75 Gold Claimed!"
-                        } else {
-                            soundEngine.playError()
-                            bannerMessage = if (lang == Lang.TR) "⏳ Bugünün ödülünü zaten aldın!" else "⏳ Already claimed today!"
-                        }
-                    },
-                    onOpenHistory = { soundEngine.playClick(); showHistoryBook = true },
+                    onOpenSpinWheel = { soundEngine.playClick(); showSpinWheelDialog = true },
+                    onOpenMuseum = { soundEngine.playClick(); showMuseumDialog = true },
                     onOpenSettings = { soundEngine.playClick(); showSettings = true },
                     onExit = { soundEngine.playClick(); onExitApp() }
                 )
@@ -540,13 +643,17 @@ fun WordGameApp(onExitApp: () -> Unit) {
                     BackHandler { soundEngine.playClick(); screen = Screen.MENU }
                     GameplayScreen(
                         lang = lang, level = currentLevel, gold = gold, bonusJarCount = bonusJarCount,
-                        worldTheme = worldTheme, soundEngine = soundEngine,
-                        onUpdateGoldAndJar = { newGold, newJar -> gold = newGold; bonusJarCount = newJar; saveState() },
+                        freeHammers = freeHammers, worldTheme = worldTheme, soundEngine = soundEngine,
+                        onUpdateEconomy = { newGold, newJar, newHammers ->
+                            gold = newGold; bonusJarCount = newJar; freeHammers = newHammers; saveState()
+                        },
                         onLevelCompleted = { earnedGold ->
                             gold += earnedGold
                             currentLevel = if (currentLevel < 300) currentLevel + 1 else 1
                             saveState()
                         },
+                        onOpenSpinWheel = { soundEngine.playClick(); showSpinWheelDialog = true },
+                        onOpenMuseum = { soundEngine.playClick(); showMuseumDialog = true },
                         onBackToMenu = { soundEngine.playClick(); screen = Screen.MENU },
                         onOpenSettings = { soundEngine.playClick(); showSettings = true }
                     )
@@ -564,19 +671,37 @@ fun WordGameApp(onExitApp: () -> Unit) {
             }
         }
 
+        if (showSpinWheelDialog) {
+            val today = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)).toInt()
+            val isFreeSpinAvailable = (lastSpinDay != today)
+            SpinWheelDialog(
+                lang = lang, gold = gold, isFreeSpin = isFreeSpinAvailable, soundEngine = soundEngine,
+                onPrizeWon = { goldDelta, hammerDelta, usedFree ->
+                    gold = (gold + goldDelta).coerceAtLeast(0)
+                    freeHammers += hammerDelta
+                    if (usedFree) lastSpinDay = today
+                    saveState()
+                },
+                onDismiss = { soundEngine.playClick(); showSpinWheelDialog = false }
+            )
+        }
+
+        if (showMuseumDialog) {
+            MuseumBuilderDialog(
+                lang = lang, currentLevel = currentLevel, worldTheme = worldTheme,
+                onDismiss = { soundEngine.playClick(); showMuseumDialog = false }
+            )
+        }
+
         if (showSettings) {
             SettingsDialog(
                 lang = lang, musicEnabled = musicEnabled, sfxEnabled = sfxEnabled, highGraphics = highGraphics,
                 onToggleMusic = { soundEngine.playClick(); musicEnabled = !musicEnabled },
                 onToggleSfx = { sfxEnabled = !sfxEnabled; soundEngine.sfxEnabled = sfxEnabled; soundEngine.playClick() },
                 onToggleGraphics = { soundEngine.playClick(); highGraphics = !highGraphics; saveState() },
-                onResetProgress = { soundEngine.playClick(); currentLevel = 1; gold = 150; bonusJarCount = 0; saveState(); showSettings = false },
+                onResetProgress = { soundEngine.playClick(); currentLevel = 1; gold = 200; bonusJarCount = 0; freeHammers = 1; saveState(); showSettings = false },
                 onDismiss = { soundEngine.playClick(); showSettings = false }
             )
-        }
-
-        if (showHistoryBook) {
-            HistoryEncyclopediaDialog(lang = lang, currentLevel = currentLevel, onDismiss = { soundEngine.playClick(); showHistoryBook = false })
         }
     }
 }
@@ -641,15 +766,18 @@ fun ConfettiEffectOverlay() {
 }
 
 // ==========================================
-// 7. ANA MENÜ EKRANI
+// 7. ANA MENÜ EKRANI (ŞANS ÇARKI & MÜZE İNŞAATI İLE)
 // ==========================================
 @Composable
 fun MainMenuScreen(
     lang: Lang, level: Int, gold: Int, worldTheme: WorldTheme,
-    onToggleLang: () -> Unit, onStartGame: () -> Unit, onDailyReward: () -> Unit,
-    onOpenHistory: () -> Unit, onOpenSettings: () -> Unit, onExit: () -> Unit
+    onToggleLang: () -> Unit, onStartGame: () -> Unit, onOpenSpinWheel: () -> Unit,
+    onOpenMuseum: () -> Unit, onOpenSettings: () -> Unit, onExit: () -> Unit
 ) {
     val league = getLeagueForLevel(level)
+    val buildStep = ((level - 1) % 10) + 1
+    val buildPercent = buildStep * 10
+
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -682,22 +810,27 @@ fun MainMenuScreen(
                     ) { Text(ch.toString(), color = Color.White, fontWeight = FontWeight.Black, fontSize = 22.sp) }
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = if (lang == Lang.TR) "🗺️ BÖLGE: ${worldTheme.regionNameTr.uppercase()}" else "🗺️ ZONE: ${worldTheme.regionNameEn.uppercase()}",
                 color = worldTheme.accentColor, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, letterSpacing = 1.5.sp
             )
-            Spacer(Modifier.height(14.dp))
-            Surface(shape = RoundedCornerShape(18.dp), color = Color.White.copy(alpha = 0.08f), border = BorderStroke(1.5.dp, league.color.copy(alpha = 0.7f))) {
-                Row(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(league.icon, fontSize = 28.sp); Spacer(Modifier.width(10.dp))
-                    Column {
-                        Text(if (lang == Lang.TR) league.nameTr else league.nameEn, color = league.color, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
-                        val nextLeagueLvl = ((level - 1) / 10 + 1) * 10 + 1
-                        Text(
-                            text = if (lang == Lang.TR) "Seviye $level / 300 • Sonraki Rütbe: Sv.$nextLeagueLvl" else "Level $level / 300 • Next Rank: Lv.$nextLeagueLvl",
-                            color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp
-                        )
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                onClick = onOpenMuseum,
+                shape = RoundedCornerShape(18.dp), color = Color.White.copy(alpha = 0.08f),
+                border = BorderStroke(1.5.dp, league.color.copy(alpha = 0.7f))
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(league.icon, fontSize = 26.sp); Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(if (lang == Lang.TR) league.nameTr else league.nameEn, color = league.color, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                            Text(
+                                text = if (lang == Lang.TR) "🏗️ ${worldTheme.monumentNameTr} İnşası: %$buildPercent" else "🏗️ Monument Build: $buildPercent%",
+                                color = Color(0xFFFDE047), fontWeight = FontWeight.Bold, fontSize = 11.sp
+                            )
+                        }
                     }
                 }
             }
@@ -706,14 +839,14 @@ fun MainMenuScreen(
         Column(modifier = Modifier.fillMaxWidth(0.88f), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             MenuButton(if (lang == Lang.TR) "▶  BAŞLA (SEVİYE $level)" else "▶  PLAY (LEVEL $level)", listOf(Color(0xFF10B981), Color(0xFF059669)), 58.dp, 18, onStartGame)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.weight(1f)) { MenuButton(if (lang == Lang.TR) "🎁 Günlük Ödül" else "🎁 Daily Bonus", listOf(Color(0xFFF59E0B), Color(0xFFD97706)), 48.dp, 13, onDailyReward) }
-                Box(Modifier.weight(1f)) { MenuButton(if (lang == Lang.TR) "🏛️ Tarih & Lig" else "🏛️ History", listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)), 48.dp, 13, onOpenHistory) }
+                Box(Modifier.weight(1f)) { MenuButton(if (lang == Lang.TR) "🎡 Şans Çarkı" else "🎡 Spin Wheel", listOf(Color(0xFFF59E0B), Color(0xFFD97706)), 50.dp, 14, onOpenSpinWheel) }
+                Box(Modifier.weight(1f)) { MenuButton(if (lang == Lang.TR) "🏗️ Müzemi İnşa Et" else "🏗️ My Museum", listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)), 50.dp, 13, onOpenMuseum) }
             }
             MenuButton(if (lang == Lang.TR) "⚙️  AYARLAR" else "⚙️  SETTINGS", listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)), 50.dp, 16, onOpenSettings)
             MenuButton(if (lang == Lang.TR) "🚪  ÇIKIŞ YAP" else "🚪  EXIT GAME", listOf(Color(0xFFEF4444), Color(0xFFB91C1C)), 48.dp, 15, onExit)
         }
 
-        Text("Galaxy Store Edition • v1.3", color = Color.White.copy(alpha = 0.35f), fontSize = 11.sp)
+        Text("Galaxy Store Edition • v2.0 (Tam Paket)", color = Color.White.copy(alpha = 0.35f), fontSize = 11.sp)
     }
 }
 
@@ -728,13 +861,15 @@ fun MenuButton(text: String, gradient: List<Color>, height: Dp, fontSize: Int, o
 }
 
 // ==========================================
-// 8. OYUN İÇİ EKRANI (ALEV + ÇEKİÇ + KÜP + BOSS)
+// 8. OYUN İÇİ EKRANI (TÜM YENİ ÖZELLİKLER AKTİF & GÖRÜNÜR!)
 // ==========================================
 @Composable
 fun GameplayScreen(
-    lang: Lang, level: Int, gold: Int, bonusJarCount: Int, worldTheme: WorldTheme,
-    soundEngine: ProceduralSoundEngine, onUpdateGoldAndJar: (Int, Int) -> Unit,
-    onLevelCompleted: (Int) -> Unit, onBackToMenu: () -> Unit, onOpenSettings: () -> Unit
+    lang: Lang, level: Int, gold: Int, bonusJarCount: Int, freeHammers: Int,
+    worldTheme: WorldTheme, soundEngine: ProceduralSoundEngine,
+    onUpdateEconomy: (Int, Int, Int) -> Unit, onLevelCompleted: (Int) -> Unit,
+    onOpenSpinWheel: () -> Unit, onOpenMuseum: () -> Unit,
+    onBackToMenu: () -> Unit, onOpenSettings: () -> Unit
 ) {
     val puzzle = remember(level, lang) { generateLevelPuzzle(level, lang) }
     var wheelLetters by remember(puzzle) { mutableStateOf(puzzle.wheelLetters) }
@@ -743,11 +878,22 @@ fun GameplayScreen(
     var foundBonusWords by remember(puzzle) { mutableStateOf(setOf<String>()) }
     var comboCount by remember(puzzle) { mutableIntStateOf(0) }
 
-    var feverProgress by remember(puzzle) { mutableFloatStateOf(0f) }
-    val isFeverMode = comboCount >= 3 && feverProgress > 0.05f
+    // Kelebekli kutular (yanlış hamlede uçup gidebilir!)
+    var activeButterflies by remember(puzzle) { mutableStateOf(puzzle.butterflyCells) }
+    var collectedGoldCells by remember(puzzle) { mutableStateOf(setOf<Pair<Int, Int>>()) }
+    var clearedFogCells by remember(puzzle) { mutableStateOf(setOf<Pair<Int, Int>>()) }
+
+    // ALEV BARI (HER ZAMAN EKRANDA GÖRÜNÜR!)
+    var feverProgress by remember(puzzle) { mutableFloatStateOf(0.15f) }
+    val isFeverMode = comboCount >= 3 && feverProgress > 0.2f
     var showLightningFlash by remember { mutableStateOf(false) }
 
+    // HEDEFLİ ÇEKİÇ, HAFIZA MODU (2x ALTIN) VE SÖZLÜK STATE'LERİ
     var isHammerMode by remember(puzzle) { mutableStateOf(false) }
+    var isMemoryMode by remember(puzzle) { mutableStateOf(false) }
+    var memoryHideLetters by remember(puzzle) { mutableStateOf(false) }
+    var selectedDictionaryWord by remember { mutableStateOf<String?>(null) }
+
     var showBonusJarDialog by remember { mutableStateOf(false) }
     var sealedWheelIndex by remember(puzzle) { mutableStateOf(puzzle.initialSealedWheelIndex) }
 
@@ -757,9 +903,6 @@ fun GameplayScreen(
     var praisePopup by remember { mutableStateOf<String?>(null) }
     var winPraiseTitle by remember(puzzle) { mutableStateOf("") }
 
-    var showTutorialOverlay by remember(level) { mutableStateOf(level == 1) }
-    LaunchedEffect(level) { if (level == 1) { delay(5000); showTutorialOverlay = false } }
-
     var remainingSeconds by remember(puzzle) { mutableIntStateOf(puzzle.timeLimitSec) }
     var isTimeOut by remember(puzzle) { mutableStateOf(false) }
     var showWinDialog by remember(puzzle) { mutableStateOf(false) }
@@ -767,12 +910,24 @@ fun GameplayScreen(
     var promotedLeague by remember(puzzle) { mutableStateOf<LeagueInfo?>(null) }
     var feedbackBanner by remember { mutableStateOf<String?>(null) }
 
+    // Hafıza Modu açıldığında 3.5 saniye harfleri gösterip sonra '?' yapar!
+    LaunchedEffect(isMemoryMode) {
+        if (isMemoryMode) {
+            memoryHideLetters = false
+            feedbackBanner = if (lang == Lang.TR) "🧠 HAFIZA MODU: Harflerin yerini ezberle (3sn)... 2x Altın!" else "🧠 MEMORY MODE: Memorize letters (3s)... 2x Gold!"
+            delay(3200)
+            if (isMemoryMode) memoryHideLetters = true
+        } else {
+            memoryHideLetters = false
+        }
+    }
+
     LaunchedEffect(puzzle, showWinDialog) {
         while (!showWinDialog) {
-            delay(100)
-            if (feverProgress > 0f) {
-                feverProgress = (feverProgress - 0.013f).coerceAtLeast(0f)
-                if (feverProgress <= 0f) comboCount = 0
+            delay(120)
+            if (feverProgress > 0.08f) {
+                feverProgress = (feverProgress - 0.011f).coerceAtLeast(0.08f)
+                if (feverProgress <= 0.09f) comboCount = 0
             }
         }
     }
@@ -788,6 +943,35 @@ fun GameplayScreen(
             }
         }
         map
+    }
+
+    // Kelebek, Altın ve Sisli Kutular açıldığında anında ödül ver!
+    LaunchedEffect(cellMap) {
+        var extraGold = 0
+        var msg: String? = null
+        for ((pos, data) in cellMap) {
+            if (data.second) {
+                if (pos in activeButterflies) {
+                    activeButterflies = activeButterflies - pos
+                    extraGold += 25
+                    msg = if (lang == Lang.TR) "🦋 KELEBEK YAKALANDI! +25 🪙" else "🦋 BUTTERFLY CAUGHT! +25 🪙"
+                }
+                if (pos in puzzle.goldCells && pos !in collectedGoldCells) {
+                    collectedGoldCells = collectedGoldCells + pos
+                    extraGold += 15
+                    if (msg == null) msg = if (lang == Lang.TR) "🪙 ALTIN KUTU AÇILDI! +15 🪙" else "🪙 GOLD TILE! +15 🪙"
+                }
+                if (pos in puzzle.fogCells && pos !in clearedFogCells) {
+                    clearedFogCells = clearedFogCells + pos
+                    extraGold += 20
+                    if (msg == null) msg = if (lang == Lang.TR) "🌫️ GİZEMLİ SİS DAĞILDI! +20 🪙" else "🌫️ MYSTERY FOG CLEARED! +20 🪙"
+                }
+            }
+        }
+        if (extraGold > 0) {
+            onUpdateEconomy(gold + extraGold, bonusJarCount, freeHammers)
+            if (msg != null) praisePopup = msg
+        }
     }
 
     val allBoardCellsOpen = remember(cellMap) { cellMap.isNotEmpty() && cellMap.values.all { it.second } }
@@ -817,7 +1001,7 @@ fun GameplayScreen(
     fun breakBossSealIfNeeded() {
         if (sealedWheelIndex != null) {
             sealedWheelIndex = null
-            soundEngine.playSealBreak()
+            soundEngine.playLightningStrike()
             praisePopup = if (lang == Lang.TR) "💥 MUHAFIZ MÜHRÜ KIRILDI!" else "💥 BOSS SEAL SHATTERED!"
         }
     }
@@ -834,12 +1018,17 @@ fun GameplayScreen(
                 soundEngine.playWordSuccess()
                 solvedWords = solvedWords + candidate
                 comboCount++
-                feverProgress = (feverProgress + 0.48f).coerceAtMost(1f)
+                feverProgress = (feverProgress + 0.42f).coerceAtMost(1f)
+
+                val memoryBonus = if (isMemoryMode) 20 else 0
+                val feverBonus = if (comboCount >= 3) 10 else 0
+                if (memoryBonus + feverBonus > 0) {
+                    onUpdateEconomy(gold + memoryBonus + feverBonus, bonusJarCount, freeHammers)
+                }
 
                 if (sealedWheelIndex != null) breakBossSealIfNeeded()
+                else if (isMemoryMode) praisePopup = if (lang == Lang.TR) "🧠 HAFIZA ŞOV! +20 🪙" else "🧠 MEMORY GENIUS! +20 🪙"
                 else praisePopup = if (lang == Lang.TR) PRAISE_WORDS_TR.random() else PRAISE_WORDS_EN.random()
-
-                if (comboCount >= 3) onUpdateGoldAndJar(gold + 10, bonusJarCount)
 
                 if (comboCount >= 4 && comboCount % 4 == 0) {
                     val closed = cellMap.filter { !it.value.second }.keys.toList()
@@ -847,7 +1036,7 @@ fun GameplayScreen(
                         soundEngine.playLightningStrike()
                         showLightningFlash = true
                         revealedCells = revealedCells + closed.random()
-                        feedbackBanner = if (lang == Lang.TR) "⚡ ALEV ŞİMŞEĞİ 1 HARF AÇTI! (+10 🪙)" else "⚡ LIGHTNING OPENED A TILE!"
+                        feedbackBanner = if (lang == Lang.TR) "⚡ ALEV ŞİMŞEĞİ 1 KUTU PATLATTI!" else "⚡ LIGHTNING OPENED A TILE!"
                     }
                 }
             }
@@ -861,55 +1050,109 @@ fun GameplayScreen(
                 val nextJar = bonusJarCount + 1
                 if (nextJar >= 5) {
                     soundEngine.playLevelWin()
-                    onUpdateGoldAndJar(gold + 100, 0)
-                    praisePopup = if (lang == Lang.TR) "🏺 ANTİK KÜP DOLDU! +100 🪙" else "🏺 BONUS JAR FULL! +100 🪙"
+                    onUpdateEconomy(gold + 100, 0, freeHammers)
+                    praisePopup = if (lang == Lang.TR) "🏺 ANTİK KÜP PATLADI! +100 🪙" else "🏺 BONUS JAR FULL! +100 🪙"
                 } else {
                     soundEngine.playBonusWord()
-                    onUpdateGoldAndJar(gold + 5, nextJar)
-                    feedbackBanner = if (lang == Lang.TR) "🏺 Bonus ($candidate)! Küp: $nextJar/5 (+5 🪙)" else "🏺 Bonus ($candidate)! Jar: $nextJar/5 (+5 🪙)"
+                    onUpdateEconomy(gold + 10, nextJar, freeHammers)
+                    feedbackBanner = if (lang == Lang.TR) "🏺 Bonus ($candidate)! Küp: $nextJar/5 (+10 🪙)" else "🏺 Bonus ($candidate)! Jar: $nextJar/5 (+10 🪙)"
                 }
             }
-            candidate.length >= 2 -> { soundEngine.playError(); comboCount = 0; feverProgress = 0f }
+            candidate.length >= 2 -> {
+                soundEngine.playError()
+                comboCount = 0
+                feverProgress = 0.08f
+                // Yanlış hamlede kelebek varsa uçup kaçabilir!
+                if (activeButterflies.isNotEmpty()) {
+                    activeButterflies = emptySet()
+                    feedbackBanner = if (lang == Lang.TR) "🦋 Yanlış hamle! Kelebek uçup kaçtı!" else "🦋 Wrong move! Butterfly flew away!"
+                }
+            }
         }
     }
 
     val league = getLeagueForLevel(level)
+    val buildPercent = (((level - 1) % 10) + 1) * 10
 
     Box(modifier = Modifier.fillMaxSize().then(if (isFeverMode) Modifier.border(3.dp, Color(0xFFF59E0B), RoundedCornerShape(12.dp)) else Modifier)) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+            // 1. ÜST BAR + HER ZAMAN GÖRÜNÜR ALEV BARI + MÜZE & ŞANS ÇARKI KISAYOLLARI
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBackToMenu, modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)) {
-                        Text("⬅", fontSize = 18.sp, color = Color.White)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        IconButton(onClick = onBackToMenu, modifier = Modifier.size(38.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)) {
+                            Text("⬅", fontSize = 17.sp, color = Color.White)
+                        }
+                        Surface(
+                            onClick = onOpenSpinWheel,
+                            shape = RoundedCornerShape(14.dp), color = Color(0xFFF59E0B).copy(alpha = 0.25f),
+                            border = BorderStroke(1.dp, Color(0xFFFBBF24))
+                        ) {
+                            Text("🎡", fontSize = 16.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+                        }
+                        Surface(
+                            onClick = onOpenMuseum,
+                            shape = RoundedCornerShape(14.dp), color = Color(0xFF8B5CF6).copy(alpha = 0.25f),
+                            border = BorderStroke(1.dp, Color(0xFFC4B5FD))
+                        ) {
+                            Text("🏗️%$buildPercent", color = Color(0xFFE9D5FF), fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
+                        }
                     }
+
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(league.icon, fontSize = 16.sp); Spacer(Modifier.width(5.dp))
-                            Text(if (lang == Lang.TR) "SEVİYE $level" else "LEVEL $level", color = Color.White, fontWeight = FontWeight.Black, fontSize = 17.sp)
+                            Text(league.icon, fontSize = 15.sp); Spacer(Modifier.width(4.dp))
+                            Text(if (lang == Lang.TR) "SEVİYE $level" else "LEVEL $level", color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp)
                         }
-                        Text(if (lang == Lang.TR) worldTheme.regionNameTr else worldTheme.regionNameEn, color = worldTheme.accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text(if (lang == Lang.TR) worldTheme.regionNameTr else worldTheme.regionNameEn, color = worldTheme.accentColor, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                     }
+
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF1E293B), border = BorderStroke(1.dp, Color(0xFFFBBF24))) {
                             Text("🪙 $gold", color = Color(0xFFFBBF24), fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
                         }
-                        Spacer(Modifier.width(6.dp))
-                        IconButton(onClick = onOpenSettings, modifier = Modifier.size(38.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)) {
-                            Text("⚙️", fontSize = 16.sp)
+                        Spacer(Modifier.width(5.dp))
+                        IconButton(onClick = onOpenSettings, modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.12f), CircleShape)) {
+                            Text("⚙️", fontSize = 15.sp)
                         }
                     }
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(5.dp))
+
+                // HER ZAMAN GÖRÜNÜR ALEV MODU & ŞİMŞEK BARI!
+                Row(
+                    modifier = Modifier.fillMaxWidth(0.96f)
+                        .background(Color.Black.copy(alpha = 0.28f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isFeverMode) "🔥 ALEV 2x!" else "🔥 Kombo x$comboCount",
+                        color = if (isFeverMode) Color(0xFFFBBF24) else Color(0xFF38BDF8),
+                        fontWeight = FontWeight.Black, fontSize = 11.sp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Box(modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.14f))) {
+                        Box(
+                            modifier = Modifier.fillMaxHeight().fillMaxWidth(feverProgress.coerceIn(0.08f, 1f)).background(
+                                Brush.horizontalGradient(if (isFeverMode) listOf(Color(0xFFF59E0B), Color(0xFFEF4444)) else listOf(Color(0xFF38BDF8), Color(0xFF10B981)))
+                            )
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text("⚡", fontSize = 13.sp)
+                }
 
                 if (puzzle.isBossLevel) {
-                    Surface(color = Color(0xFF7F1D1D).copy(alpha = 0.9f), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Color(0xFFF87171)), modifier = Modifier.fillMaxWidth()) {
-                        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (lang == Lang.TR) worldTheme.bossTitleTr else worldTheme.bossTitleEn, color = Color(0xFFFECACA), fontWeight = FontWeight.Black, fontSize = 12.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Surface(color = Color(0xFF7F1D1D).copy(alpha = 0.9f), shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, Color(0xFFF87171)), modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (lang == Lang.TR) worldTheme.bossTitleTr else worldTheme.bossTitleEn, color = Color(0xFFFECACA), fontWeight = FontWeight.Black, fontSize = 11.sp)
                             Text(
                                 text = if (sealedWheelIndex != null) (if (lang == Lang.TR) "🪨 1 Kelime Bul -> Mührü Kır!" else "🪨 Find 1 Word -> Unseal!") else (if (lang == Lang.TR) "💥 Mühür Kırıldı!" else "💥 Seal Broken!"),
                                 color = Color(0xFFFDE047), fontWeight = FontWeight.Bold, fontSize = 11.sp
@@ -922,36 +1165,22 @@ fun GameplayScreen(
                         color = if (remainingSeconds <= 10) Color(0xFFEF4444) else Color(0xFFFBBF24), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp
                     )
                 }
-
-                if (feverProgress > 0.02f) {
-                    Spacer(Modifier.height(4.dp))
-                    Row(modifier = Modifier.fillMaxWidth(0.92f), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (isFeverMode) "🔥 ALEV 2x!" else "🔥 x$comboCount", color = if (isFeverMode) Color(0xFFFBBF24) else Color(0xFF38BDF8), fontWeight = FontWeight.Black, fontSize = 11.sp)
-                        Spacer(Modifier.width(8.dp))
-                        Box(modifier = Modifier.weight(1f).height(7.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.15f))) {
-                            Box(
-                                modifier = Modifier.fillMaxHeight().fillMaxWidth(feverProgress.coerceIn(0f, 1f)).background(
-                                    Brush.horizontalGradient(if (isFeverMode) listOf(Color(0xFFF59E0B), Color(0xFFEF4444)) else listOf(Color(0xFF38BDF8), Color(0xFF10B981)))
-                                )
-                            )
-                        }
-                    }
-                }
             }
 
-            AnimatedVisibility(visible = isHammerMode || showTutorialOverlay) {
-                Surface(color = if (isHammerMode) Color(0xFFD97706) else Color(0xFF0284C7), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+            // ÇEKİÇ UYARISI
+            AnimatedVisibility(visible = isHammerMode) {
+                Surface(color = Color(0xFFD97706), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                     Text(
-                        text = if (isHammerMode) (if (lang == Lang.TR) "🔨 ÇEKİÇ AKTİF: Kırmak istediğin kapalı kutuya dokun!" else "🔨 HAMMER READY: Tap any closed tile to smash it!")
-                        else (if (lang == Lang.TR) "👋 Parmağını aşağıdaki dev çarkta kaydırarak kelimeleri bul!" else "👋 Swipe across the wheel below to connect letters!"),
-                        color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(8.dp)
+                        text = if (lang == Lang.TR) "🔨 ÇEKİÇ HAZIR: Yukarıda kırmak istediğin kapalı kutuya dokun!" else "🔨 HAMMER READY: Tap any closed tile to smash it!",
+                        color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(6.dp)
                     )
                 }
             }
 
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f).padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-                val cellW = (maxWidth / (puzzle.gridCols + 1).coerceAtLeast(4)).coerceAtMost(46.dp)
-                val cellH = (maxHeight / (puzzle.gridRows + 1).coerceAtLeast(4)).coerceAtMost(46.dp)
+            // 2. BULMACA TABLOSU (🦋 Kelebek + 🪙 Altın + 🌫️ Sis + 📖 Dokununca Sözlük!)
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f).padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
+                val cellW = (maxWidth / (puzzle.gridCols + 1).coerceAtLeast(4)).coerceAtMost(45.dp)
+                val cellH = (maxHeight / (puzzle.gridRows + 1).coerceAtLeast(4)).coerceAtMost(45.dp)
                 val cellSize = minOf(cellW, cellH).coerceAtLeast(22.dp)
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -962,30 +1191,68 @@ fun GameplayScreen(
                                 val cellData = cellMap[pos]
                                 if (cellData != null) {
                                     val (ch, isOpen) = cellData
+                                    val hasButterfly = pos in activeButterflies && !isOpen
+                                    val hasGold = pos in puzzle.goldCells && pos !in collectedGoldCells && !isOpen
+                                    val hasFog = pos in puzzle.fogCells && pos !in clearedFogCells && !isOpen
+
                                     val popScale by animateFloatAsState(
                                         targetValue = if (isOpen) 1f else if (isHammerMode) 0.96f else 0.92f,
                                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "pop"
                                     )
                                     Box(
                                         modifier = Modifier.size(cellSize).scale(popScale).shadow(if (isOpen) 6.dp else 2.dp, RoundedCornerShape(9.dp))
-                                            .background(if (isOpen) Brush.verticalGradient(worldTheme.openTileGradient) else Brush.verticalGradient(listOf(Color(0xFF334155), Color(0xFF1E293B))), RoundedCornerShape(9.dp))
+                                            .background(
+                                                when {
+                                                    isOpen -> Brush.verticalGradient(worldTheme.openTileGradient)
+                                                    hasFog -> Brush.verticalGradient(listOf(Color(0xFF4C1D95), Color(0xFF2E1065)))
+                                                    else -> Brush.verticalGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
+                                                },
+                                                RoundedCornerShape(9.dp)
+                                            )
                                             .border(
                                                 width = if (isHammerMode && !isOpen) 2.dp else 1.5.dp,
-                                                color = when { isOpen -> Color.White.copy(alpha = 0.7f); isHammerMode -> Color(0xFFFBBF24); else -> Color.White.copy(alpha = 0.25f) },
+                                                color = when {
+                                                    isOpen -> Color.White.copy(alpha = 0.7f)
+                                                    isHammerMode -> Color(0xFFFBBF24)
+                                                    hasButterfly -> Color(0xFF38BDF8)
+                                                    hasGold -> Color(0xFFFBBF24)
+                                                    hasFog -> Color(0xFFC084FC)
+                                                    else -> Color.White.copy(alpha = 0.25f)
+                                                },
                                                 shape = RoundedCornerShape(9.dp)
                                             )
-                                            .clickable(enabled = isHammerMode && !isOpen) {
-                                                soundEngine.playHammerHit()
-                                                onUpdateGoldAndJar(gold - 35, bonusJarCount)
-                                                revealedCells = revealedCells + pos
-                                                isHammerMode = false
-                                                breakBossSealIfNeeded()
-                                                praisePopup = if (lang == Lang.TR) "🔨 KUTU KIRILDI!" else "🔨 TILE SMASHED!"
+                                            .clickable {
+                                                if (isHammerMode && !isOpen) {
+                                                    soundEngine.playHammerHit()
+                                                    if (freeHammers > 0) {
+                                                        onUpdateEconomy(gold, bonusJarCount, freeHammers - 1)
+                                                    } else {
+                                                        onUpdateEconomy(gold - 80, bonusJarCount, freeHammers)
+                                                    }
+                                                    revealedCells = revealedCells + pos
+                                                    isHammerMode = false
+                                                    breakBossSealIfNeeded()
+                                                } else if (isOpen) {
+                                                    // AÇIK KUTUYA DOKUNUNCA MİNİ SÖZLÜK AÇILIR!
+                                                    val ownerWord = puzzle.placedWords.find { pw ->
+                                                        if (pw.isHorizontal) pw.row == r && c in pw.col until (pw.col + pw.word.length)
+                                                        else pw.col == c && r in pw.row until (pw.row + pw.word.length)
+                                                    }?.word
+                                                    if (ownerWord != null) {
+                                                        soundEngine.playClick()
+                                                        selectedDictionaryWord = ownerWord
+                                                    }
+                                                }
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (isOpen) Text(ch.toString(), color = Color.White, fontWeight = FontWeight.Black, fontSize = (cellSize.value * 0.50f).sp)
-                                        else if (isHammerMode) Text("🎯", fontSize = (cellSize.value * 0.36f).sp)
+                                        when {
+                                            isOpen -> Text(ch.toString(), color = Color.White, fontWeight = FontWeight.Black, fontSize = (cellSize.value * 0.50f).sp)
+                                            isHammerMode -> Text("🎯", fontSize = (cellSize.value * 0.38f).sp)
+                                            hasButterfly -> Text("🦋", fontSize = (cellSize.value * 0.42f).sp)
+                                            hasGold -> Text("🪙", fontSize = (cellSize.value * 0.38f).sp)
+                                            hasFog -> Text("🌫️", fontSize = (cellSize.value * 0.40f).sp)
+                                        }
                                     }
                                 } else Spacer(Modifier.size(cellSize))
                             }
@@ -994,18 +1261,25 @@ fun GameplayScreen(
                 }
             }
 
+            // ANLIK KELİME ÖNİZLEME & BİLDİRİM SATIRI
             val currentPreview = selectedIndices.map { wheelLetters[it] }.joinToString("")
-            Box(modifier = Modifier.fillMaxWidth().height(34.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxWidth().height(30.dp), contentAlignment = Alignment.Center) {
                 if (currentPreview.isNotEmpty()) {
                     Surface(color = worldTheme.accentColor, shape = RoundedCornerShape(18.dp), shadowElevation = 6.dp) {
-                        Text(currentPreview, color = Color(0xFF0F172A), fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 2.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                        Text(currentPreview, color = Color(0xFF0F172A), fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 2.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 3.dp))
                     }
                 } else if (feedbackBanner != null) {
-                    LaunchedEffect(feedbackBanner) { delay(1600); feedbackBanner = null }
-                    Text(feedbackBanner ?: "", color = Color(0xFFFBBF24), fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center)
+                    LaunchedEffect(feedbackBanner) { delay(1800); feedbackBanner = null }
+                    Text(feedbackBanner ?: "", color = Color(0xFFFBBF24), fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.Center)
+                } else {
+                    Text(
+                        text = if (lang == Lang.TR) "💡 Açılan kelimelerin anlamına bakmak için kutulara dokun!" else "💡 Tap opened tiles to see word meanings!",
+                        color = Color.White.copy(alpha = 0.45f), fontSize = 10.sp
+                    )
                 }
             }
 
+            // 3. YENİ GÜÇ BARI (ROKET KALDIRILDI! Fiyatlar: 💡 50 🪙, 🔨 80 🪙 + 🧠 2x Hafıza Modu Eklendi!)
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Surface(onClick = { soundEngine.playClick(); showBonusJarDialog = true }, shape = RoundedCornerShape(14.dp), color = Color(0xFF78350F).copy(alpha = 0.45f), border = BorderStroke(1.dp, Color(0xFFF59E0B))) {
@@ -1022,55 +1296,60 @@ fun GameplayScreen(
                             if (currentSealedChar != null) sealedWheelIndex = wheelLetters.indexOf(currentSealedChar).takeIf { it >= 0 }
                         },
                         shape = RoundedCornerShape(14.dp), color = Color.White.copy(alpha = 0.14f), border = BorderStroke(1.dp, Color(0xFF38BDF8))
-                    ) { Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp)) { Text("🔀", fontSize = 15.sp) } }
+                    ) { Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) { Text("🔀", fontSize = 15.sp) } }
                 }
 
+                // SAĞ: 💡 İpucu (50 🪙) + 🔨 Çekiç (80 🪙 veya Bedava) + 🧠 2x Hafıza Modu (ROKET KALKTI!)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Surface(
                         onClick = {
                             val unrevealed = cellMap.filter { !it.value.second }.keys.toList()
-                            if (gold >= 25 && unrevealed.isNotEmpty()) {
-                                soundEngine.playClick(); onUpdateGoldAndJar(gold - 25, bonusJarCount)
+                            if (gold >= 50 && unrevealed.isNotEmpty()) {
+                                soundEngine.playClick(); onUpdateEconomy(gold - 50, bonusJarCount, freeHammers)
                                 revealedCells = revealedCells + unrevealed.random(); breakBossSealIfNeeded()
-                            } else if (gold < 25) { soundEngine.playError(); feedbackBanner = if (lang == Lang.TR) "İpucu için 25 🪙!" else "Need 25 🪙!" }
+                            } else if (gold < 50) { soundEngine.playError(); feedbackBanner = if (lang == Lang.TR) "İpucu için 50 🪙 gerekir!" else "Need 50 🪙!" }
                         },
                         shape = RoundedCornerShape(14.dp), color = Color(0xFFF59E0B).copy(alpha = 0.22f), border = BorderStroke(1.dp, Color(0xFFFBBF24))
                     ) {
-                        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("💡", fontSize = 14.sp); Spacer(Modifier.width(3.dp))
-                            Text("25", color = Color(0xFFFBBF24), fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                        Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("💡", fontSize = 14.sp); Spacer(Modifier.width(4.dp))
+                            Text("50", color = Color(0xFFFBBF24), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                         }
                     }
 
                     Surface(
                         onClick = {
                             if (isHammerMode) { soundEngine.playClick(); isHammerMode = false }
-                            else if (gold >= 35) { soundEngine.playClick(); isHammerMode = true }
-                            else { soundEngine.playError(); feedbackBanner = if (lang == Lang.TR) "Çekiç için 35 🪙!" else "Need 35 🪙!" }
+                            else if (freeHammers > 0 || gold >= 80) { soundEngine.playClick(); isHammerMode = true }
+                            else { soundEngine.playError(); feedbackBanner = if (lang == Lang.TR) "Çekiç için 80 🪙 gerekir!" else "Need 80 🪙!" }
                         },
                         shape = RoundedCornerShape(14.dp),
                         color = if (isHammerMode) Color(0xFFF59E0B) else Color(0xFFEA580C).copy(alpha = 0.28f),
                         border = BorderStroke(1.5.dp, if (isHammerMode) Color.White else Color(0xFFFB923C))
                     ) {
-                        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("🔨", fontSize = 14.sp); Spacer(Modifier.width(3.dp))
-                            Text("35", color = if (isHammerMode) Color.Black else Color(0xFFFDBA74), fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                        Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("🔨", fontSize = 14.sp); Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = if (freeHammers > 0) "x$freeHammers" else "80",
+                                color = if (isHammerMode) Color.Black else Color(0xFFFDBA74),
+                                fontWeight = FontWeight.ExtraBold, fontSize = 12.sp
+                            )
                         }
                     }
 
+                    // 🧠 HAFIZA MODU (2x ALTIN RİSK BUTONU)
                     Surface(
                         onClick = {
-                            val unrevealed = cellMap.filter { !it.value.second }.keys.shuffled()
-                            if (gold >= 60 && unrevealed.isNotEmpty()) {
-                                soundEngine.playBonusWord(); onUpdateGoldAndJar(gold - 60, bonusJarCount)
-                                revealedCells = revealedCells + unrevealed.take(3); breakBossSealIfNeeded()
-                            } else if (gold < 60) { soundEngine.playError(); feedbackBanner = if (lang == Lang.TR) "Roket için 60 🪙!" else "Need 60 🪙!" }
+                            soundEngine.playClick()
+                            isMemoryMode = !isMemoryMode
                         },
-                        shape = RoundedCornerShape(14.dp), color = Color(0xFFEC4899).copy(alpha = 0.25f), border = BorderStroke(1.dp, Color(0xFFF472B6))
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isMemoryMode) Color(0xFF10B981) else Color(0xFF8B5CF6).copy(alpha = 0.28f),
+                        border = BorderStroke(1.5.dp, if (isMemoryMode) Color.White else Color(0xFFC4B5FD))
                     ) {
-                        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("🚀", fontSize = 14.sp); Spacer(Modifier.width(3.dp))
-                            Text("60", color = Color(0xFFF472B6), fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                        Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("🧠", fontSize = 14.sp); Spacer(Modifier.width(3.dp))
+                            Text("2x", color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
                         }
                     }
                 }
@@ -1078,7 +1357,8 @@ fun GameplayScreen(
 
             WordSwipeWheel(
                 letters = wheelLetters, selectedIndices = selectedIndices, sealedIndex = sealedWheelIndex,
-                currentTouchPos = currentTouchPos, comboCount = comboCount, accentColor = worldTheme.accentColor,
+                hideLettersForMemory = memoryHideLetters, currentTouchPos = currentTouchPos,
+                comboCount = comboCount, accentColor = worldTheme.accentColor,
                 onSelectIndex = { idx ->
                     if (idx == sealedWheelIndex) {
                         soundEngine.playError()
@@ -1103,7 +1383,24 @@ fun GameplayScreen(
         ) {
             LaunchedEffect(praisePopup) { if (praisePopup != null) { delay(1150); praisePopup = null } }
             Surface(shape = RoundedCornerShape(28.dp), color = Color(0xFF0F172A).copy(alpha = 0.94f), border = BorderStroke(2.dp, Color(0xFFFBBF24)), shadowElevation = 12.dp) {
-                Text(praisePopup ?: "", color = Color(0xFFFBBF24), fontWeight = FontWeight.Black, fontSize = 20.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
+                Text(praisePopup ?: "", color = Color(0xFFFBBF24), fontWeight = FontWeight.Black, fontSize = 19.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
+            }
+        }
+    }
+
+    // 📖 MİNİ KELİME SÖZLÜĞÜ PENCERESİ
+    selectedDictionaryWord?.let { word ->
+        Dialog(onDismissRequest = { selectedDictionaryWord = null }) {
+            Surface(shape = RoundedCornerShape(22.dp), color = Color(0xFF1E293B), border = BorderStroke(2.dp, Color(0xFF38BDF8))) {
+                Column(modifier = Modifier.padding(20.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("📖 $word", color = Color(0xFFFBBF24), fontWeight = FontWeight.Black, fontSize = 22.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text(getWordMeaning(word, lang), color = Color.White, fontSize = 14.sp, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(14.dp))
+                    Button(onClick = { selectedDictionaryWord = null }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))) {
+                        Text(if (lang == Lang.TR) "Anladım" else "Got It", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }
@@ -1117,13 +1414,13 @@ fun GameplayScreen(
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = if (lang == Lang.TR) "Tabloda olmayan geçerli kelimeler buldukça küp dolar. Her 5 bonus kelimede küp kırılır ve +100 🪙 verir!"
-                        else "Find extra valid words not on the board. Every 5 bonus words breaks the jar for +100 🪙!",
+                        else "Every 5 bonus words breaks the jar for +100 🪙!",
                         color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center, fontSize = 13.sp
                     )
                     Spacer(Modifier.height(12.dp))
                     Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF0F172A), modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text(if (lang == Lang.TR) "Bu Bölümde Bulduğun Bonus Kelimeler:" else "Bonus Words Found This Level:", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(if (lang == Lang.TR) "Bu Bölümde Bulduğun Bonus Kelimeler:" else "Bonus Words Found:", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             Spacer(Modifier.height(4.dp))
                             Text(if (foundBonusWords.isEmpty()) (if (lang == Lang.TR) "Henüz yok — çarktan farklı kelimeler dene!" else "None yet!") else foundBonusWords.joinToString(", "), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         }
@@ -1153,53 +1450,39 @@ fun GameplayScreen(
     }
 
     if (showWinDialog) {
-        val totalEarned = 25 + (if (puzzle.isTimeAttack) remainingSeconds * 2 else 0) + (if (puzzle.isBossLevel) 100 else 0) + (if (promotedLeague != null) 75 else 0)
+        val monumentCompleteBonus = if (level % 10 == 0) 150 else 0
+        val totalEarned = 30 + (if (puzzle.isTimeAttack) remainingSeconds * 2 else 0) + (if (puzzle.isBossLevel) 80 else 0) + monumentCompleteBonus
         Dialog(onDismissRequest = {}) {
             Box(contentAlignment = Alignment.Center) {
                 ConfettiEffectOverlay()
                 Surface(shape = RoundedCornerShape(26.dp), color = Color(0xFF0F172A), border = BorderStroke(2.5.dp, Color(0xFFFBBF24)), shadowElevation = 16.dp) {
-                    Column(modifier = Modifier.padding(22.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (puzzle.isBossLevel) "🗿👑🗿" else "⭐⭐⭐", fontSize = 30.sp)
-                        Spacer(Modifier.height(6.dp))
+                    Column(modifier = Modifier.padding(20.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (puzzle.isBossLevel) "🗿👑🗿" else "⭐⭐⭐", fontSize = 28.sp)
+                        Spacer(Modifier.height(4.dp))
                         Text(
                             text = if (puzzle.isBossLevel) (if (lang == Lang.TR) "🎉 MUHAFIZ YENİLDİ! (SV.$level)" else "🎉 GUARDIAN DEFEATED! (LV.$level)")
                             else (if (lang == Lang.TR) "🎉 SEVİYE $level GEÇİLDİ!" else "🎉 LEVEL $level CLEARED!"),
-                            color = Color.White, fontWeight = FontWeight.Black, fontSize = 19.sp, textAlign = TextAlign.Center
+                            color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp, textAlign = TextAlign.Center
                         )
-                        Spacer(Modifier.height(6.dp))
-                        Text(winPraiseTitle, color = Color(0xFFFBBF24), fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, textAlign = TextAlign.Center)
-                        Spacer(Modifier.height(10.dp))
-                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF064E3B), border = BorderStroke(1.dp, Color(0xFF34D399))) {
-                            Text(if (lang == Lang.TR) "Toplam Ödül: +$totalEarned 🪙" else "Total Reward: +$totalEarned 🪙", color = Color(0xFF6EE7B7), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                        }
-
-                        promotedLeague?.let { newLg ->
-                            Spacer(Modifier.height(10.dp))
-                            val nextWorld = getWorldThemeForLevel(level + 1)
-                            Surface(shape = RoundedCornerShape(14.dp), color = newLg.color.copy(alpha = 0.16f), border = BorderStroke(1.5.dp, newLg.color)) {
-                                Column(modifier = Modifier.padding(10.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(newLg.icon, fontSize = 28.sp)
-                                    Text(
-                                        text = if (lang == Lang.TR) "YENİ RÜTBE & YENİ BÖLGE!\n${newLg.nameTr} • ${nextWorld.regionNameTr}" else "NEW RANK & NEW ZONE!\n${newLg.nameEn} • ${nextWorld.regionNameEn}",
-                                        color = newLg.color, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, fontSize = 13.sp
-                                    )
-                                }
-                            }
+                        Text(winPraiseTitle, color = Color(0xFFFBBF24), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(8.dp))
+                        Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF064E3B), border = BorderStroke(1.dp, Color(0xFF34D399))) {
+                            Text(if (lang == Lang.TR) "Toplam Ödül: +$totalEarned 🪙 • Müze: %$buildPercent" else "Reward: +$totalEarned 🪙 • Museum: $buildPercent%", color = Color(0xFF6EE7B7), fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
                         }
 
                         unlockedFact?.let { fact ->
                             Spacer(Modifier.height(10.dp))
-                            Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF1E293B), border = BorderStroke(1.dp, Color(0xFF38BDF8))) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text(if (lang == Lang.TR) "🏛️ TARİH KÖŞESİ: ${fact.titleTr}" else "🏛️ HISTORICAL FACT: ${fact.titleEn}", color = Color(0xFF38BDF8), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFF1E293B), border = BorderStroke(1.dp, Color(0xFF38BDF8))) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text(if (lang == Lang.TR) "🏛️ ESER TAMAMLANDI (+150 🪙): ${fact.titleTr}" else "🏛️ MONUMENT COMPLETED: ${fact.titleEn}", color = Color(0xFF38BDF8), fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
                                     Spacer(Modifier.height(4.dp))
-                                    Text(if (lang == Lang.TR) fact.infoTr else fact.infoEn, color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp, lineHeight = 15.sp)
+                                    Text(if (lang == Lang.TR) fact.infoTr else fact.infoEn, color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp, lineHeight = 14.sp)
                                 }
                             }
                         }
 
                         Spacer(Modifier.height(14.dp))
-                        MenuButton(if (lang == Lang.TR) "SEVİYE ${level + 1}'E GEÇ ➔" else "CONTINUE TO LEVEL ${level + 1} ➔", listOf(Color(0xFF10B981), Color(0xFF059669)), 50.dp, 16) {
+                        MenuButton(if (lang == Lang.TR) "SEVİYE ${level + 1}'E GEÇ ➔" else "CONTINUE TO LEVEL ${level + 1} ➔", listOf(Color(0xFF10B981), Color(0xFF059669)), 48.dp, 15) {
                             soundEngine.playClick(); showWinDialog = false; onLevelCompleted(totalEarned)
                         }
                     }
@@ -1210,15 +1493,182 @@ fun GameplayScreen(
 }
 
 // ==========================================
-// 9. NEON PUSULA HARF ÇARKI (BOSS MÜHÜR DESTEKLİ)
+// 9. 🎡 DÖNEN ŞANS ÇARKI & 🏗️ MÜZEMİ İNŞA ET PENCERELERİ
+// ==========================================
+@Composable
+fun SpinWheelDialog(
+    lang: Lang, gold: Int, isFreeSpin: Boolean, soundEngine: ProceduralSoundEngine,
+    onPrizeWon: (Int, Int, Boolean) -> Unit, onDismiss: () -> Unit
+) {
+    val prizesTr = listOf("+50 🪙", "+100 🪙", "🔨 Çekiç", "+150 🪙", "+75 🪙", "💎 250 🪙")
+    val sliceColors = listOf(Color(0xFFF59E0B), Color(0xFF10B981), Color(0xFF8B5CF6), Color(0xFF3B82F6), Color(0xFFEC4899), Color(0xFFEF4444))
+    var targetAngle by remember { mutableFloatStateOf(0f) }
+    var isSpinning by remember { mutableStateOf(false) }
+    var resultText by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    val animatedAngle by animateFloatAsState(
+        targetValue = targetAngle,
+        animationSpec = tween(durationMillis = 2800, easing = FastOutSlowInEasing),
+        label = "spin"
+    )
+
+    Dialog(onDismissRequest = { if (!isSpinning) onDismiss() }) {
+        Surface(shape = RoundedCornerShape(26.dp), color = Color(0xFF0F172A), border = BorderStroke(2.dp, Color(0xFFFBBF24))) {
+            Column(modifier = Modifier.padding(20.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (lang == Lang.TR) "🎡 GÜNLÜK ŞANS ÇARKI" else "🎡 LUCKY SPIN WHEEL", color = Color(0xFFFBBF24), fontWeight = FontWeight.Black, fontSize = 20.sp)
+                Spacer(Modifier.height(6.dp))
+                Text("🔻", fontSize = 22.sp)
+
+                // Renkli Dönen Çark Canvas
+                Box(modifier = Modifier.size(210.dp), contentAlignment = Alignment.Center) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        rotate(animatedAngle) {
+                            val sweep = 360f / prizesTr.size
+                            for (i in prizesTr.indices) {
+                                drawArc(
+                                    color = sliceColors[i],
+                                    startAngle = i * sweep - 90f - sweep / 2f,
+                                    sweepAngle = sweep,
+                                    useCenter = true
+                                )
+                            }
+                            drawCircle(color = Color.White, radius = size.width / 2f, style = Stroke(width = 6f))
+                        }
+                        drawCircle(color = Color(0xFF0F172A), radius = 26f)
+                        drawCircle(color = Color(0xFFFBBF24), radius = 26f, style = Stroke(width = 4f))
+                    }
+                    Text("🎁", fontSize = 18.sp)
+                }
+
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = resultText ?: (if (lang == Lang.TR) "Ödüller: 50🪙 • 100🪙 • 150🪙 • 250🪙 • Bedava 🔨" else "Prizes: Up to 250🪙 & Free Hammer!"),
+                    color = if (resultText != null) Color(0xFF34D399) else Color.White.copy(alpha = 0.8f),
+                    fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(14.dp))
+
+                MenuButton(
+                    text = if (isSpinning) (if (lang == Lang.TR) "ÇARK DÖNÜYOR..." else "SPINNING...")
+                    else if (isFreeSpin) (if (lang == Lang.TR) "ÜCRETSİZ ÇEVİR! 🎰" else "FREE SPIN! 🎰")
+                    else (if (lang == Lang.TR) "TEKRAR ÇEVİR (40 🪙)" else "SPIN AGAIN (40 🪙)"),
+                    gradient = listOf(Color(0xFF10B981), Color(0xFF059669)), height = 48.dp, fontSize = 15
+                ) {
+                    if (isSpinning) return@MenuButton
+                    if (!isFreeSpin && gold < 40) {
+                        soundEngine.playError()
+                        resultText = if (lang == Lang.TR) "Yetersiz Altın (40 🪙 gerekir)!" else "Need 40 🪙!"
+                        return@MenuButton
+                    }
+                    isSpinning = true
+                    resultText = null
+                    val winIdx = Random.nextInt(prizesTr.size)
+                    val extraSpins = 5 * 360f
+                    val sliceAngle = 360f / prizesTr.size
+                    val cost = if (isFreeSpin) 0 else 40
+                    targetAngle += extraSpins + (360f - winIdx * sliceAngle)
+
+                    scope.launch {
+                        repeat(10) { delay(240); soundEngine.playWheelTick() }
+                        delay(450)
+                        soundEngine.playLevelWin()
+                        when (winIdx) {
+                            0 -> { onPrizeWon(50 - cost, 0, isFreeSpin); resultText = "🎉 +50 🪙 KAZANDIN!" }
+                            1 -> { onPrizeWon(100 - cost, 0, isFreeSpin); resultText = "🎉 +100 🪙 KAZANDIN!" }
+                            2 -> { onPrizeWon(-cost, 1, isFreeSpin); resultText = "🎉 +1 BEDAVA 🔨 ÇEKİÇ KAZANDIN!" }
+                            3 -> { onPrizeWon(150 - cost, 0, isFreeSpin); resultText = "🎉 +150 🪙 KAZANDIN!" }
+                            4 -> { onPrizeWon(75 - cost, 0, isFreeSpin); resultText = "🎉 +75 🪙 KAZANDIN!" }
+                            else -> { onPrizeWon(250 - cost, 0, isFreeSpin); resultText = "💎 JACKPOT! +250 🪙 KAZANDIN!" }
+                        }
+                        isSpinning = false
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { if (!isSpinning) onDismiss() }) {
+                    Text(if (lang == Lang.TR) "Kapat" else "Close", color = Color.White.copy(alpha = 0.7f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MuseumBuilderDialog(lang: Lang, currentLevel: Int, worldTheme: WorldTheme, onDismiss: () -> Unit) {
+    val stepInZone = ((currentLevel - 1) % 10) + 1
+    val percent = stepInZone * 10
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF0F172A), border = BorderStroke(2.dp, Color(0xFF8B5CF6)), modifier = Modifier.fillMaxHeight(0.84f)) {
+            Column(modifier = Modifier.padding(18.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (lang == Lang.TR) "🏗️ MÜZEMİ İNŞA ET" else "🏗️ BUILD MY MUSEUM", color = Color(0xFFC4B5FD), fontWeight = FontWeight.Black, fontSize = 19.sp)
+                Text(
+                    text = if (lang == Lang.TR) "Aktif İnşaat: ${worldTheme.monumentNameTr} (%$percent)" else "Current Build: $percent%",
+                    color = Color(0xFFFDE047), fontWeight = FontWeight.Bold, fontSize = 13.sp
+                )
+                Spacer(Modifier.height(10.dp))
+
+                // Canlı Mimari Anıt İnşaat Çizimi (10 Kademeli)
+                Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF1E293B), border = BorderStroke(1.dp, worldTheme.accentColor), modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                    Canvas(modifier = Modifier.fillMaxSize().padding(14.dp)) {
+                        val w = size.width; val h = size.height
+                        // 1. Kademe: Mermer Platform Temeli
+                        if (stepInZone >= 1) drawRoundRect(Color(0xFF94A3B8), Offset(w * 0.1f, h * 0.82f), Size(w * 0.8f, h * 0.14f), CornerRadius(8f, 8f))
+                        // 2-3. Kademe: Alt Basamaklar
+                        if (stepInZone >= 2) drawRoundRect(Color(0xFFCBD5E1), Offset(w * 0.16f, h * 0.72f), Size(w * 0.68f, h * 0.10f), CornerRadius(6f, 6f))
+                        // 4-6. Kademe: Tarihi Sütunlar
+                        if (stepInZone >= 4) drawRect(worldTheme.accentColor, Offset(w * 0.22f, h * 0.35f), Size(w * 0.08f, h * 0.37f))
+                        if (stepInZone >= 5) drawRect(worldTheme.accentColor, Offset(w * 0.46f, h * 0.35f), Size(w * 0.08f, h * 0.37f))
+                        if (stepInZone >= 6) drawRect(worldTheme.accentColor, Offset(w * 0.70f, h * 0.35f), Size(w * 0.08f, h * 0.37f))
+                        // 7-8. Kademe: Üst Kemer
+                        if (stepInZone >= 7) drawRoundRect(Color(0xFFE2E8F0), Offset(w * 0.18f, h * 0.25f), Size(w * 0.64f, h * 0.10f), CornerRadius(8f, 8f))
+                        // 9-10. Kademe: Altın Kubbe ve Alem
+                        if (stepInZone >= 9) drawArc(Color(0xFFFBBF24), 180f, 180f, true, Offset(w * 0.28f, h * 0.05f), Size(w * 0.44f, h * 0.40f))
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(HISTORICAL_FACTS) { fact ->
+                        val isUnlocked = currentLevel > fact.levelMilestone
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isUnlocked) Color(0xFF1E293B) else Color.White.copy(alpha = 0.04f),
+                            border = BorderStroke(1.dp, if (isUnlocked) Color(0xFF34D399) else Color.White.copy(alpha = 0.1f))
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                                Text(
+                                    text = if (isUnlocked) "✅ ${fact.titleTr} (TAMAMLANDI)" else "🏗️ Seviye ${fact.levelMilestone}'da Tamamlanır: ${fact.titleTr}",
+                                    color = if (isUnlocked) Color(0xFF34D399) else Color.White.copy(alpha = 0.7f),
+                                    fontWeight = FontWeight.Bold, fontSize = 12.sp
+                                )
+                                if (isUnlocked) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(if (lang == Lang.TR) fact.infoTr else fact.infoEn, color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))) {
+                    Text(if (lang == Lang.TR) "Tamam" else "Close", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// 10. NEON PUSULA HARF ÇARKI (HAFIZA MODU & MÜHÜR DESTEKLİ)
 // ==========================================
 @Composable
 fun WordSwipeWheel(
     letters: List<Char>, selectedIndices: List<Int>, sealedIndex: Int?,
-    currentTouchPos: Offset?, comboCount: Int, accentColor: Color,
+    hideLettersForMemory: Boolean, currentTouchPos: Offset?, comboCount: Int, accentColor: Color,
     onSelectIndex: (Int) -> Unit, onUpdateTouch: (Offset?) -> Unit, onDragEnd: () -> Unit
 ) {
-    val wheelDiameter = 248.dp
+    val wheelDiameter = 242.dp
     val density = LocalDensity.current
     val wheelPx = with(density) { wheelDiameter.toPx() }
     val center = Offset(wheelPx / 2f, wheelPx / 2f)
@@ -1310,9 +1760,14 @@ fun WordSwipeWheel(
             val scaleAnim by animateFloatAsState(if (isSelected) 1.22f else 1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "s")
             val offsetX = with(density) { (c.x - wheelPx / 2f).toDp() }
             val offsetY = with(density) { (c.y - wheelPx / 2f).toDp() }
+            val displayChar = when {
+                isSealed -> "🪨$ch"
+                hideLettersForMemory && !isSelected -> "?"
+                else -> ch.toString()
+            }
             Text(
-                text = if (isSealed) "🪨$ch" else ch.toString(),
-                color = when { isSealed -> Color(0xFFFCA5A5); isSelected -> Color(0xFF0F172A); else -> Color.White },
+                text = displayChar,
+                color = when { isSealed -> Color(0xFFFCA5A5); isSelected -> Color(0xFF0F172A); hideLettersForMemory -> Color(0xFFC4B5FD); else -> Color.White },
                 fontWeight = FontWeight.Black,
                 fontSize = (if (isSealed) 16 else if (letters.size <= 6) 23 else 20).sp,
                 modifier = Modifier.offset(x = offsetX, y = offsetY).scale(scaleAnim)
@@ -1322,7 +1777,7 @@ fun WordSwipeWheel(
 }
 
 // ==========================================
-// 10. AYARLAR & TARİH ANSİKLOPEDİSİ
+// 11. AYARLAR PENCERESİ
 // ==========================================
 @Composable
 fun SettingsDialog(
@@ -1335,7 +1790,7 @@ fun SettingsDialog(
             Column(modifier = Modifier.padding(22.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(if (lang == Lang.TR) "⚙️ OYUN AYARLARI" else "⚙️ GAME SETTINGS", color = Color.White, fontWeight = FontWeight.Black, fontSize = 19.sp)
                 SettingRow(if (lang == Lang.TR) "🎵 Arka Plan Müziği" else "🎵 Background Music", musicEnabled, onToggleMusic)
-                SettingRow(if (lang == Lang.TR) "🔊 Buton & Çark Sesleri" else "🔊 Sound Effects (SFX)", sfxEnabled, onToggleSfx)
+                SettingRow(if (lang == Lang.TR) "🔊 Akustik Harp & Efektler" else "🔊 Sound Effects (SFX)", sfxEnabled, onToggleSfx)
                 SettingRow(if (lang == Lang.TR) "✨ Yüksek Grafik & Animasyon" else "✨ High Graphics", highGraphics, onToggleGraphics)
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1354,45 +1809,6 @@ fun SettingRow(title: String, checked: Boolean, onToggle: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Switch(checked = checked, onCheckedChange = { onToggle() })
-    }
-}
-
-@Composable
-fun HistoryEncyclopediaDialog(lang: Lang, currentLevel: Int, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF0F172A), border = BorderStroke(1.5.dp, Color(0xFF8B5CF6)), modifier = Modifier.fillMaxHeight(0.8f)) {
-            Column(modifier = Modifier.padding(18.dp).fillMaxSize()) {
-                Text(if (lang == Lang.TR) "🏛️ TARİH KÖŞESİ & LİGLER" else "🏛️ HISTORY & LEAGUES", color = Color(0xFFC4B5FD), fontWeight = FontWeight.Black, fontSize = 18.sp)
-                Text(if (lang == Lang.TR) "Her 10 seviyede bir yeni tarihi eser ve yeni rütbe açılır!" else "A new historical landmark and rank unlocks every 10 levels!", color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp)
-                Spacer(Modifier.height(12.dp))
-                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(HISTORICAL_FACTS) { fact ->
-                        val isUnlocked = currentLevel > fact.levelMilestone
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isUnlocked) Color(0xFF1E293B) else Color.White.copy(alpha = 0.04f),
-                            border = BorderStroke(1.dp, if (isUnlocked) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.1f))
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
-                                Text(
-                                    text = if (isUnlocked) (if (lang == Lang.TR) "✅ Sv.${fact.levelMilestone} - ${fact.titleTr}" else "✅ Lv.${fact.levelMilestone} - ${fact.titleEn}")
-                                    else (if (lang == Lang.TR) "🔒 Seviye ${fact.levelMilestone} Bittiğinde Açılır" else "🔒 Unlocks at Level ${fact.levelMilestone}"),
-                                    color = if (isUnlocked) Color(0xFF38BDF8) else Color.Gray, fontWeight = FontWeight.Bold, fontSize = 13.sp
-                                )
-                                if (isUnlocked) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(if (lang == Lang.TR) fact.infoTr else fact.infoEn, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))) {
-                    Text(if (lang == Lang.TR) "Kapat" else "Close", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
     }
 }
 // === KODUN TAMAMI BİTTİ ===
