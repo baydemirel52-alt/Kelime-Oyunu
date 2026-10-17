@@ -156,7 +156,7 @@ class AdMobManager(private val activity: Activity) {
         const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
         const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
         const val TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917"
-        const val PRIVACY_POLICY_URL = "https://github.com/baydemirel52-alt/kelime-oyunu"
+        const val CONTACT_EMAIL = "baydemirel52@gmail.com"
     }
 
     private var interstitialAd: InterstitialAd? = null
@@ -317,9 +317,11 @@ class AdMobManager(private val activity: Activity) {
         }
     }
 
-    fun openPrivacyPolicy() {
+    // Gizlilik politikasindaki iletisim e-postasi (mail uygulamasini acar)
+    fun openContactEmail() {
         try {
-            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
+            val uri = Uri.parse("mailto:" + CONTACT_EMAIL + "?subject=" + Uri.encode("Kelime Efsanesi"))
+            activity.startActivity(Intent(Intent.ACTION_SENDTO, uri))
         } catch (_: Exception) {}
     }
 }
@@ -1209,9 +1211,9 @@ fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
                 onToggleMusic = { soundEngine.playClick(); musicEnabled = !musicEnabled },
                 onToggleSfx = { sfxEnabled = !sfxEnabled; soundEngine.sfxEnabled = sfxEnabled; soundEngine.playClick() },
                 onToggleGraphics = { soundEngine.playClick(); highGraphics = !highGraphics; saveState() },
-                onOpenPrivacyPolicy = {
+                onContactEmail = {
                     soundEngine.playClick()
-                    adMobManager.openPrivacyPolicy()
+                    adMobManager.openContactEmail()
                 },
                 privacyOptionsRequired = adMobManager.privacyOptionsRequired,
                 onOpenPrivacyOptions = {
@@ -2569,12 +2571,14 @@ fun SettingsDialog(
     onToggleMusic: () -> Unit,
     onToggleSfx: () -> Unit,
     onToggleGraphics: () -> Unit,
-    onOpenPrivacyPolicy: () -> Unit,
+    onContactEmail: () -> Unit,
     privacyOptionsRequired: Boolean,
     onOpenPrivacyOptions: () -> Unit,
     onResetProgress: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var showPolicy by remember { mutableStateOf(false) }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF1E293B), border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.25f))) {
             Column(modifier = Modifier.padding(22.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2583,7 +2587,7 @@ fun SettingsDialog(
                 SettingRow(if (lang == Lang.TR) "🔊 Akustik Harp & Efektler" else "🔊 Sound Effects (SFX)", sfxEnabled, onToggleSfx)
                 SettingRow(if (lang == Lang.TR) "✨ Yüksek Grafik & Animasyon" else "✨ High Graphics", highGraphics, onToggleGraphics)
 
-                TextButton(onClick = onOpenPrivacyPolicy, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { showPolicy = true }, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = if (lang == Lang.TR) "🔒 Gizlilik Politikası & Aydınlatma Metni" else "🔒 Privacy Policy",
                         color = Color(0xFF38BDF8),
@@ -2613,6 +2617,10 @@ fun SettingsDialog(
             }
         }
     }
+
+    if (showPolicy) {
+        PrivacyPolicyDialog(lang = lang, onContactEmail = onContactEmail, onDismiss = { showPolicy = false })
+    }
 }
 
 @Composable
@@ -2622,4 +2630,83 @@ fun SettingRow(title: String, checked: Boolean, onToggle: () -> Unit) {
         Switch(checked = checked, onCheckedChange = { onToggle() })
     }
 }
+// ==========================================
+// 12. UYGULAMA ICI GIZLILIK POLITIKASI (TR / EN) - e-posta ile iletisim
+// ==========================================
+private val PRIVACY_TR_TITLE = """Gizlilik Politikası"""
+private val PRIVACY_TR_UPDATED = """Son güncelleme: 17 Ekim 2026"""
+private val PRIVACY_TR_INTRO = """Kelime Efsanesi ("Uygulama"), bağımsız geliştirici Selim tarafından geliştirilmiştir. Bu politika, Uygulama'yı kullanırken hangi bilgilerin işlendiğini ve haklarınızı açıklar."""
+private val PRIVACY_TR_SECTIONS: List<Pair<String, String>> = listOf(
+    """1. Hesap ve kişisel bilgiler""" to """Uygulamayı kullanmak için hesap açmanız gerekmez. Adınızı, e-posta adresinizi, telefon numaranızı, konumunuzu, kişi listenizi, fotoğraflarınızı, kameranızı veya mikrofonunuzu istemeyiz ve toplamayız. Geliştirici olarak sunucularımızda sizinle ilgili kişisel veri tutmayız.""",
+    """2. Oyun verileriniz""" to """Seviyeniz, altınınız, ayarlarınız ve günlük çark hakkınız yalnızca cihazınızda saklanır, bize gönderilmez. Uygulamayı kaldırdığınızda veya Ayarlar'daki "İlerlemeyi Sıfırla" düğmesine bastığınızda silinir.""",
+    """3. Reklamlar (Google AdMob)""" to """Uygulama, reklam göstermek için Google AdMob hizmetini kullanır. Reklamları göstermek, ölçmek ve kötüye kullanımı önlemek amacıyla Google; reklam kimliğinizi (Android Advertising ID), IP adresinizi, cihaz ve işletim sistemi bilgilerinizi, uygulama kullanımı ve reklam etkileşimi verilerinizi ve IP adresinden türetilen yaklaşık konumunuzu işleyebilir. Bu veriler Google tarafından işlenir ve Google'ın politikaları geçerlidir: policies.google.com/privacy ve policies.google.com/technologies/partner-sites""",
+    """4. Reklam tercihleriniz""" to """Avrupa Ekonomik Alanı, Birleşik Krallık ve İsviçre'de Google'ın onay formu ile izninizi isteriz; tercihinizi Ayarlar bölümündeki "Reklam Tercihleri" düğmesinden istediğiniz zaman değiştirebilirsiniz. Her yerde, reklam kimliğinizi Android Ayarlar > Google > Reklamlar bölümünden sıfırlayabilir veya silebilir, böylece reklamların kişiselleştirilmesini sınırlayabilirsiniz.""",
+    """5. İzinler""" to """Uygulama yalnızca reklamların yüklenmesi için internet erişimi, ağ durumu ve reklam kimliği (Advertising ID) izinlerini kullanır. Konum, kişiler, kamera, mikrofon veya depolama izni istemez.""",
+    """6. Çocuklar""" to """Uygulama 13 yaşın altındaki çocuklara yönelik değildir ve bu yaştaki çocuklardan bilerek veri toplamayız.""",
+    """7. Veri paylaşımı""" to """Kişisel verilerinizi satmayız ve reklam ortağımız Google dışında kimseyle paylaşmayız.""",
+    """8. Haklarınız""" to """6698 sayılı KVKK ve (Avrupa'daysanız) GDPR kapsamında verilerinizle ilgili bilgi isteme, düzeltme, silme ve itiraz etme haklarına sahipsiniz. Oyun verileriniz yalnızca cihazınızda olduğundan çoğu işlemi doğrudan cihazınızdan yapabilirsiniz; reklam verileriyle ilgili talepleriniz için Google'a veya bize e-postayla ulaşabilirsiniz.""",
+    """9. Değişiklikler""" to """Bu politikayı zaman zaman güncelleyebiliriz. Güncel sürüm Uygulama'nın Ayarlar bölümünde ve bu sayfada yayınlanır; son güncelleme tarihi yukarıda yazar.""",
+    """10. İletişim""" to """Soru, talep ve şikayetleriniz için: baydemirel52@gmail.com"""
+)
+
+private val PRIVACY_EN_TITLE = """Privacy Policy"""
+private val PRIVACY_EN_UPDATED = """Last updated: 17 October 2026"""
+private val PRIVACY_EN_INTRO = """Kelime Efsanesi (the "App") is developed by Selim, an independent developer. This policy explains what information is processed when you use the App, and your rights."""
+private val PRIVACY_EN_SECTIONS: List<Pair<String, String>> = listOf(
+    """1. Account and personal information""" to """You do not need an account to use the App. We do not ask for or collect your name, email address, phone number, location, contacts, photos, camera or microphone. As the developer, we do not keep personal data about you on our servers.""",
+    """2. Your game data""" to """Your level, gold, settings and daily spin count are stored only on your device and are never sent to us. They are deleted when you uninstall the App or tap "Reset Save" in Settings.""",
+    """3. Ads (Google AdMob)""" to """The App uses Google AdMob to show ads. To serve and measure ads and prevent abuse, Google may process your advertising ID (Android Advertising ID), IP address, device and operating system information, app usage and ad interaction data, and an approximate location derived from your IP address. This data is processed by Google and Google's policies apply: policies.google.com/privacy and policies.google.com/technologies/partner-sites""",
+    """4. Your ad choices""" to """In the European Economic Area, the United Kingdom and Switzerland we ask for your consent using Google's consent form; you can change your choice at any time with the "Ad Privacy Choices" button in Settings. Everywhere, you can reset or delete your advertising ID under Android Settings > Google > Ads to limit ad personalization.""",
+    """5. Permissions""" to """The App only uses internet access, network state and advertising ID permissions, so that ads can load. It does not request location, contacts, camera, microphone or storage permissions.""",
+    """6. Children""" to """The App is not directed at children under 13, and we do not knowingly collect data from children of that age.""",
+    """7. Data sharing""" to """We do not sell your personal data and do not share it with anyone other than our ad partner Google.""",
+    """8. Your rights""" to """Under Turkish KVKK (Law No. 6698) and, if you are in Europe, the GDPR, you have the right to request information about, correct, delete and object to the processing of your data. Because your game data exists only on your device, you can do most of this directly on your device; for requests about ad data, contact Google or email us.""",
+    """9. Changes""" to """We may update this policy from time to time. The current version is published in the App's Settings and on this page, and the last updated date is shown above.""",
+    """10. Contact""" to """For questions, requests and complaints: baydemirel52@gmail.com"""
+)
+
+@Composable
+fun PrivacyPolicyDialog(lang: Lang, onContactEmail: () -> Unit, onDismiss: () -> Unit) {
+    val title = if (lang == Lang.TR) PRIVACY_TR_TITLE else PRIVACY_EN_TITLE
+    val updated = if (lang == Lang.TR) PRIVACY_TR_UPDATED else PRIVACY_EN_UPDATED
+    val intro = if (lang == Lang.TR) PRIVACY_TR_INTRO else PRIVACY_EN_INTRO
+    val sections = if (lang == Lang.TR) PRIVACY_TR_SECTIONS else PRIVACY_EN_SECTIONS
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFF0F172A),
+            border = BorderStroke(2.dp, Color(0xFF38BDF8)),
+            modifier = Modifier.fillMaxHeight(0.88f)
+        ) {
+            Column(modifier = Modifier.padding(18.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("🔒 " + title, color = Color(0xFF7DD3FC), fontWeight = FontWeight.Black, fontSize = 19.sp)
+                Text(updated, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
+                Spacer(Modifier.height(8.dp))
+                LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    item {
+                        Text(intro, color = Color.White.copy(alpha = 0.88f), fontSize = 12.sp, lineHeight = 17.sp)
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    items(sections) { section ->
+                        Text(section.first, color = Color(0xFFFBBF24), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Spacer(Modifier.height(2.dp))
+                        Text(section.second, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, lineHeight = 17.sp)
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = onContactEmail, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0EA5E9))) {
+                        Text(if (lang == Lang.TR) "✉️ E-posta Gönder" else "✉️ Email Us", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    Button(onClick = onDismiss, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))) {
+                        Text(if (lang == Lang.TR) "Kapat" else "Close", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // === KODUN TAMAMI BITTI ===
