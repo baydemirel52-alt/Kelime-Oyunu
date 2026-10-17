@@ -111,6 +111,7 @@ import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
 import kotlinx.coroutines.CoroutineScope
@@ -122,6 +123,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
@@ -163,6 +165,17 @@ class AdMobManager(private val activity: Activity) {
     var isRewardedLoaded by mutableStateOf(false)
         private set
 
+    // Tam ekran reklam acikken zamana karsi yaris sayaci durur
+    var isAdShowing by mutableStateOf(false)
+        private set
+
+    // AB / Ingiltere / Isvicre oyunculari icin Ayarlar'da "Reklam Tercihleri" butonu gerekir
+    var privacyOptionsRequired by mutableStateOf(false)
+        private set
+
+    // MobileAds.initialize en fazla bir kez cagrilsin
+    private val adsInitStarted = AtomicBoolean(false)
+
     fun requestConsentAndInitAds() {
         val params = ConsentRequestParameters.Builder().build()
         val consentInfo = UserMessagingPlatform.getConsentInformation(activity)
@@ -171,28 +184,46 @@ class AdMobManager(private val activity: Activity) {
             params,
             {
                 UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) {
+                    privacyOptionsRequired = consentInfo.privacyOptionsRequirementStatus ==
+                        ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
                     if (consentInfo.canRequestAds()) {
                         initMobileAds()
                     }
                 }
             },
             {
-                initMobileAds()
+                // Onay bilgisi alinamadiysa yalnizca daha once izin kaydi varsa reklam baslat
+                if (consentInfo.canRequestAds()) {
+                    initMobileAds()
+                }
             }
         )
+        // Daha once onay verilmisse formu beklemeden baslat (initMobileAds tek sefer calisir)
         if (consentInfo.canRequestAds()) {
             initMobileAds()
         }
     }
 
     private fun initMobileAds() {
+        if (!adsInitStarted.compareAndSet(false, true)) return
         MobileAds.initialize(activity) {
             loadInterstitial()
             loadRewarded()
         }
     }
 
+    // Ayarlar > Reklam Tercihleri (onay secimini degistirme)
+    fun showPrivacyOptions() {
+        UserMessagingPlatform.showPrivacyOptionsForm(activity) {
+            if (UserMessagingPlatform.getConsentInformation(activity).canRequestAds()) {
+                initMobileAds()
+            }
+        }
+    }
+
     fun loadInterstitial() {
+        // Onay alinmadan reklam istegi gonderme
+        if (!adsInitStarted.get()) return
         InterstitialAd.load(
             activity,
             TEST_INTERSTITIAL_ID,
@@ -209,6 +240,7 @@ class AdMobManager(private val activity: Activity) {
     }
 
     fun loadRewarded() {
+        if (!adsInitStarted.get()) return
         RewardedAd.load(
             activity,
             TEST_REWARDED_ID,
@@ -234,17 +266,20 @@ class AdMobManager(private val activity: Activity) {
         if (completedLevel > 5 && ad != null && (now - lastInterstitialTimeMs >= minIntervalMs)) {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
+                    isAdShowing = false
                     interstitialAd = null
                     lastInterstitialTimeMs = System.currentTimeMillis()
                     loadInterstitial()
                     onFinished()
                 }
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                    isAdShowing = false
                     interstitialAd = null
                     loadInterstitial()
                     onFinished()
                 }
             }
+            isAdShowing = true
             ad.show(activity)
         } else {
             if (ad == null) loadInterstitial()
@@ -262,18 +297,21 @@ class AdMobManager(private val activity: Activity) {
         var earned = false
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
+                isAdShowing = false
                 rewardedAd = null
                 isRewardedLoaded = false
                 loadRewarded()
                 if (earned) onRewardEarned()
             }
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                isAdShowing = false
                 rewardedAd = null
                 isRewardedLoaded = false
                 loadRewarded()
                 onNotReady()
             }
         }
+        isAdShowing = true
         ad.show(activity) {
             earned = true
         }
@@ -284,6 +322,12 @@ class AdMobManager(private val activity: Activity) {
             activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
         } catch (_: Exception) {}
     }
+}
+
+// Gunluk cark icin yerel saate gore gun numarasi (gece yarisi sifirlanir)
+fun currentDayNumber(): Int {
+    val now = System.currentTimeMillis()
+    return ((now + java.util.TimeZone.getDefault().getOffset(now)) / 86_400_000L).toInt()
 }
 
 @Composable
@@ -988,7 +1032,7 @@ fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
     var highGraphics by remember { mutableStateOf(prefs.getBoolean("graphics", true)) }
 
     // Gunluk Cark Siniri (Gunde 1 Ucretsiz + En Fazla 2 Reklamli = Toplam 3 Hak)
-    val todayDayNumber = remember { (System.currentTimeMillis() / (1000 * 60 * 60 * 24)).toInt() }
+    val todayDayNumber = remember { currentDayNumber() }
     var lastSpinDay by remember { mutableIntStateOf(prefs.getInt("spin_day", -1)) }
     var spinsUsedToday by remember {
         val savedDay = prefs.getInt("spin_day", -1)
@@ -1127,7 +1171,7 @@ fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
         }
 
         if (showSpinWheelDialog) {
-            val today = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)).toInt()
+            val today = currentDayNumber()
             if (lastSpinDay != today) {
                 spinsUsedToday = 0
             }
@@ -1168,6 +1212,11 @@ fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
                 onOpenPrivacyPolicy = {
                     soundEngine.playClick()
                     adMobManager.openPrivacyPolicy()
+                },
+                privacyOptionsRequired = adMobManager.privacyOptionsRequired,
+                onOpenPrivacyOptions = {
+                    soundEngine.playClick()
+                    adMobManager.showPrivacyOptions()
                 },
                 onResetProgress = {
                     soundEngine.playClick()
@@ -1521,7 +1570,8 @@ fun GameplayScreen(
         if (puzzle.isTimeAttack && !showWinDialog && !isTimeOut) {
             while (remainingSeconds > 0 && !allBoardCellsOpen) {
                 delay(1000)
-                remainingSeconds--
+                // Tam ekran reklam acikken sure akmaz
+                if (!adMobManager.isAdShowing) remainingSeconds--
             }
             if (remainingSeconds <= 0 && !allBoardCellsOpen) {
                 isTimeOut = true
@@ -2520,6 +2570,8 @@ fun SettingsDialog(
     onToggleSfx: () -> Unit,
     onToggleGraphics: () -> Unit,
     onOpenPrivacyPolicy: () -> Unit,
+    privacyOptionsRequired: Boolean,
+    onOpenPrivacyOptions: () -> Unit,
     onResetProgress: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -2538,6 +2590,17 @@ fun SettingsDialog(
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
+                }
+
+                if (privacyOptionsRequired) {
+                    TextButton(onClick = onOpenPrivacyOptions, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = if (lang == Lang.TR) "🛡️ Reklam Tercihleri (Onay Ayarları)" else "🛡️ Ad Privacy Choices",
+                            color = Color(0xFF38BDF8),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
