@@ -3,6 +3,7 @@ package com.selim.kelimeoyunu
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
@@ -148,15 +149,38 @@ class MainActivity : ComponentActivity() {
 }
 
 // ==========================================
-// 0. GOOGLE ADMOB & UMP YONETICISI (RESMI TEST KIMLIKLERI)
+// 0. GOOGLE ADMOB & UMP YONETICISI (GERCEK + TEST KORUMALI KIMLIKLER)
 // ==========================================
 class AdMobManager(private val activity: Activity) {
     companion object {
-        // Google Resmi Test Reklam Birimi Kimlikleri (Gelistirme asamasinda ban riskini sifira indirir)
+        // Senin Gercek AdMob Reklam Birimi Kimliklerin (Release APK/AAB'de otomatik devreye girer)
+        const val REAL_INTERSTITIAL_ID = "ca-app-pub-2295789870341419/9733700921"
+        const val REAL_REWARDED_ID = "ca-app-pub-2295789870341419/7299109278"
+        // Not: AdMob'da Banner birimi olusturursan ID'sini asagidaki tirnak icine yazabilirsin (bos kalirsa menude banner gizlenir)
+        const val REAL_BANNER_ID = ""
+
+        // Google Resmi Test Reklam Birimi Kimlikleri (Debug derlemelerde ban riskini onlemek icin otomatik kullanilir)
         const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
         const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
         const val TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917"
+
         const val CONTACT_EMAIL = "baydemirel52@gmail.com"
+
+        fun isDebugBuild(context: Context): Boolean {
+            return (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        }
+
+        fun getInterstitialUnitId(context: Context): String {
+            return if (isDebugBuild(context)) TEST_INTERSTITIAL_ID else REAL_INTERSTITIAL_ID
+        }
+
+        fun getRewardedUnitId(context: Context): String {
+            return if (isDebugBuild(context)) TEST_REWARDED_ID else REAL_REWARDED_ID
+        }
+
+        fun getBannerUnitId(context: Context): String {
+            return if (isDebugBuild(context)) TEST_BANNER_ID else REAL_BANNER_ID
+        }
     }
 
     private var interstitialAd: InterstitialAd? = null
@@ -226,7 +250,7 @@ class AdMobManager(private val activity: Activity) {
         if (!adsInitStarted.get()) return
         InterstitialAd.load(
             activity,
-            TEST_INTERSTITIAL_ID,
+            getInterstitialUnitId(activity),
             AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
@@ -243,7 +267,7 @@ class AdMobManager(private val activity: Activity) {
         if (!adsInitStarted.get()) return
         RewardedAd.load(
             activity,
-            TEST_REWARDED_ID,
+            getRewardedUnitId(activity),
             AdRequest.Builder().build(),
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(ad: RewardedAd) {
@@ -334,6 +358,10 @@ fun currentDayNumber(): Int {
 
 @Composable
 fun MenuBannerAdView() {
+    val context = LocalContext.current
+    val unitId = remember { AdMobManager.getBannerUnitId(context) }
+    if (unitId.isBlank()) return
+
     AndroidView(
         modifier = Modifier
             .fillMaxWidth()
@@ -341,7 +369,7 @@ fun MenuBannerAdView() {
         factory = { ctx ->
             AdView(ctx).apply {
                 setAdSize(AdSize.BANNER)
-                adUnitId = AdMobManager.TEST_BANNER_ID
+                adUnitId = unitId
                 loadAd(AdRequest.Builder().build())
             }
         }
@@ -2137,11 +2165,28 @@ fun GameplayScreen(
                                 isTimeOut = false
                             },
                             onNotReady = {
-                                // Test sirasinda reklam henuz yuklenmediyse oyuncuyu magdur etmemek icin verir
-                                remainingSeconds = 30
-                                isTimeOut = false
+                                soundEngine.playError()
+                                feedbackBanner = if (lang == Lang.TR) "⏳ Reklam henüz hazır değil, birkaç saniye sonra tekrar dene!" else "⏳ Ad not ready yet, try again in a moment!"
                             }
                         )
+                    }
+                    if (gold >= 50) {
+                        Spacer(Modifier.height(8.dp))
+                        MenuButton(
+                            text = if (lang == Lang.TR) "🪙 50 Altın Ver (+30 Sn Ekle)" else "🪙 Spend 50 Gold (+30s)",
+                            gradient = listOf(Color(0xFFF59E0B), Color(0xFFD97706)),
+                            height = 44.dp,
+                            fontSize = 13
+                        ) {
+                            soundEngine.playClick()
+                            onUpdateEconomy(gold - 50, bonusJarCount, freeHammers)
+                            remainingSeconds = 30
+                            isTimeOut = false
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = { isTimeOut = false; onBackToMenu() }) {
+                        Text(if (lang == Lang.TR) "Ana Menüye Dön" else "Back to Menu", color = Color.White.copy(alpha = 0.7f))
                     }
                 }
             }
@@ -2630,6 +2675,7 @@ fun SettingRow(title: String, checked: Boolean, onToggle: () -> Unit) {
         Switch(checked = checked, onCheckedChange = { onToggle() })
     }
 }
+
 // ==========================================
 // 12. UYGULAMA ICI GIZLILIK POLITIKASI (TR / EN) - e-posta ile iletisim
 // ==========================================
