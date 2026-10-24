@@ -104,8 +104,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.AdSize
-import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
@@ -157,11 +155,7 @@ class AdMobManager(private val activity: Activity) {
         // Senin Gercek AdMob Reklam Birimi Kimliklerin (Release APK/AAB'de otomatik devreye girer)
         const val REAL_INTERSTITIAL_ID = "ca-app-pub-2295789870341419/9733700921"
         const val REAL_REWARDED_ID = "ca-app-pub-2295789870341419/7299109278"
-        // Not: AdMob'da Banner birimi olusturursan ID'sini asagidaki tirnak icine yazabilirsin (bos kalirsa menude banner gizlenir)
-        const val REAL_BANNER_ID = ""
-
         // Google Resmi Test Reklam Birimi Kimlikleri (Debug derlemelerde ban riskini onlemek icin otomatik kullanilir)
-        const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
         const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
         const val TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917"
 
@@ -177,10 +171,6 @@ class AdMobManager(private val activity: Activity) {
 
         fun getRewardedUnitId(context: Context): String {
             return if (isDebugBuild(context)) TEST_REWARDED_ID else REAL_REWARDED_ID
-        }
-
-        fun getBannerUnitId(context: Context): String {
-            return if (isDebugBuild(context)) TEST_BANNER_ID else REAL_BANNER_ID
         }
     }
 
@@ -355,26 +345,6 @@ class AdMobManager(private val activity: Activity) {
 fun currentDayNumber(): Int {
     val now = System.currentTimeMillis()
     return ((now + java.util.TimeZone.getDefault().getOffset(now)) / 86_400_000L).toInt()
-}
-
-@Composable
-fun MenuBannerAdView() {
-    val context = LocalContext.current
-    val unitId = remember { AdMobManager.getBannerUnitId(context) }
-    if (unitId.isBlank()) return
-
-    AndroidView(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp),
-        factory = { ctx ->
-            AdView(ctx).apply {
-                setAdSize(AdSize.BANNER)
-                adUnitId = unitId
-                loadAd(AdRequest.Builder().build())
-            }
-        }
-    )
 }
 
 // ==========================================
@@ -1551,10 +1521,7 @@ fun MainMenuScreen(
             MenuButton(if (lang == Lang.TR) "🚪  ÇIKIŞ YAP" else "🚪  EXIT GAME", listOf(Color(0xFFEF4444), Color(0xFFB91C1C)), 46.dp, 14, onExit)
         }
 
-        // Sadece Ana Menude Banner Reklam (Oyun icinde carkin yaninda yanlislikla tiklanmamasi icin)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            MenuBannerAdView()
-            Spacer(Modifier.height(4.dp))
             Text("Galaxy Store & Play Edition • v$versionName", color = Color.White.copy(alpha = 0.35f), fontSize = 10.sp)
         }
     }
