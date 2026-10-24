@@ -3,6 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
     <application
         android:allowBackup="true"
@@ -11,10 +12,10 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
-        <!-- Google AdMob Resmi Test Uygulama Kimligi (Magazaya cikarken kendi ID'n ile degisecek) -->
+        <!-- Google AdMob Gercek Uygulama Kimligin (App ID) -->
         <meta-data
-    android:name="com.google.android.gms.ads.APPLICATION_ID"
-    android:value="ca-app-pub-2295789870341419~7240941510"/>
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-2295789870341419~7240941510" />
 
         <activity
             android:name=".MainActivity"
