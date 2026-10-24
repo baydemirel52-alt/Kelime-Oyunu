@@ -75,6 +75,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -374,6 +375,76 @@ fun MenuBannerAdView() {
             }
         }
     )
+}
+
+// ==========================================
+// 0.5 GERCEK PENCERE ACILIS & KAPANIS ANIMASYONU YONETICISI
+// ==========================================
+@Composable
+fun AnimatedGameDialog(
+    highGraphics: Boolean,
+    canDismiss: Boolean = true,
+    onDismiss: () -> Unit,
+    content: @Composable (closeWithAction: (() -> Unit) -> Unit) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var isVisible by remember { mutableStateOf(!highGraphics) }
+    var isClosing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (highGraphics) {
+            isVisible = true
+        }
+    }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.82f,
+        animationSpec = if (isVisible) {
+            spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
+        } else {
+            tween(durationMillis = 145, easing = FastOutSlowInEasing)
+        },
+        label = "dialogScale"
+    )
+
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = if (isVisible) 170 else 140, easing = FastOutSlowInEasing),
+        label = "dialogAlpha"
+    )
+
+    val triggerCloseWithAction: (() -> Unit) -> Unit = { action ->
+        if (!isClosing) {
+            if (!highGraphics) {
+                action()
+            } else {
+                isClosing = true
+                isVisible = false
+                scope.launch {
+                    delay(145)
+                    action()
+                }
+            }
+        }
+    }
+
+    Dialog(
+        onDismissRequest = {
+            if (canDismiss) {
+                triggerCloseWithAction(onDismiss)
+            }
+        }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .scale(if (highGraphics) scale else 1f)
+                .alpha(if (highGraphics) alpha else 1f),
+            contentAlignment = Alignment.Center
+        ) {
+            content(triggerCloseWithAction)
+        }
+    }
 }
 
 // ==========================================
@@ -1033,7 +1104,7 @@ private fun canPlaceWord(grid: Array<CharArray>, word: String, r: Int, c: Int, i
 }
 
 // ==========================================
-// 5. ANA UYGULAMA YONETICISI
+// 5. ANA UYGULAMA YONETICISI (EKRAN VE PENCERE ANIMASYONLU)
 // ==========================================
 enum class Screen { MENU, GAME }
 
@@ -1071,10 +1142,39 @@ fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
     }
 
     var screen by remember { mutableStateOf(Screen.MENU) }
+    var displayedScreen by remember { mutableStateOf(Screen.MENU) }
+    var screenVisible by remember { mutableStateOf(true) }
+
     var showSettings by remember { mutableStateOf(false) }
     var showMuseumDialog by remember { mutableStateOf(false) }
     var showSpinWheelDialog by remember { mutableStateOf(false) }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
+
+    // Menu <-> Oyun arasi akici gecis animasyonu
+    LaunchedEffect(screen) {
+        if (displayedScreen != screen) {
+            if (highGraphics) {
+                screenVisible = false
+                delay(140)
+                displayedScreen = screen
+                screenVisible = true
+            } else {
+                displayedScreen = screen
+                screenVisible = true
+            }
+        }
+    }
+
+    val screenScale by animateFloatAsState(
+        targetValue = if (screenVisible) 1f else 0.94f,
+        animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
+        label = "screenScale"
+    )
+    val screenAlpha by animateFloatAsState(
+        targetValue = if (screenVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
+        label = "screenAlpha"
+    )
 
     fun saveState() {
         prefs.edit()
@@ -1122,8 +1222,14 @@ fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = worldTheme.bgGradient))) {
         PuzzleWordBackground(highGraphics = highGraphics, accentColor = worldTheme.accentColor)
 
-        Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-            when (screen) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .scale(if (highGraphics) screenScale else 1f)
+                .alpha(if (highGraphics) screenAlpha else 1f)
+        ) {
+            when (displayedScreen) {
                 Screen.MENU -> MainMenuScreen(
                     lang = lang,
                     level = currentLevel,
@@ -1151,6 +1257,7 @@ fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
                         gold = gold,
                         bonusJarCount = bonusJarCount,
                         freeHammers = freeHammers,
+                        highGraphics = highGraphics,
                         worldTheme = worldTheme,
                         soundEngine = soundEngine,
                         adMobManager = adMobManager,
@@ -1208,6 +1315,7 @@ fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
             SpinWheelDialog(
                 lang = lang,
                 spinsUsedToday = spinsUsedToday,
+                highGraphics = highGraphics,
                 soundEngine = soundEngine,
                 adMobManager = adMobManager,
                 onPrizeWon = { goldDelta, hammerDelta ->
@@ -1225,6 +1333,7 @@ fun WordGameApp(adMobManager: AdMobManager, onExitApp: () -> Unit) {
             MuseumBuilderDialog(
                 lang = lang,
                 currentLevel = currentLevel,
+                highGraphics = highGraphics,
                 worldTheme = worldTheme,
                 onDismiss = { soundEngine.playClick(); showMuseumDialog = false }
             )
@@ -1462,7 +1571,7 @@ fun MenuButton(text: String, gradient: List<Color>, height: Dp, fontSize: Int, o
 }
 
 // ==========================================
-// 8. OYUN ICI EKRANI (ODULLU REKLAM DESTEKLI)
+// 8. OYUN ICI EKRANI (ODULLU REKLAM & PENCERE ANIMASYON DESTEKLI)
 // ==========================================
 @Composable
 fun GameplayScreen(
@@ -1471,6 +1580,7 @@ fun GameplayScreen(
     gold: Int,
     bonusJarCount: Int,
     freeHammers: Int,
+    highGraphics: Boolean,
     worldTheme: WorldTheme,
     soundEngine: ProceduralSoundEngine,
     adMobManager: AdMobManager,
@@ -2091,14 +2201,20 @@ fun GameplayScreen(
     }
 
     selectedDictionaryWord?.let { word ->
-        Dialog(onDismissRequest = { selectedDictionaryWord = null }) {
+        AnimatedGameDialog(
+            highGraphics = highGraphics,
+            onDismiss = { selectedDictionaryWord = null }
+        ) { closeWithAction ->
             Surface(shape = RoundedCornerShape(22.dp), color = Color(0xFF1E293B), border = BorderStroke(2.dp, Color(0xFF38BDF8))) {
                 Column(modifier = Modifier.padding(20.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("📖 $word", color = Color(0xFFFBBF24), fontWeight = FontWeight.Black, fontSize = 22.sp)
                     Spacer(Modifier.height(8.dp))
                     Text(getWordMeaning(word, lang), color = Color.White, fontSize = 14.sp, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(14.dp))
-                    Button(onClick = { selectedDictionaryWord = null }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))) {
+                    Button(
+                        onClick = { soundEngine.playClick(); closeWithAction { selectedDictionaryWord = null } },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
+                    ) {
                         Text(if (lang == Lang.TR) "Anladım" else "Got It", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -2107,7 +2223,10 @@ fun GameplayScreen(
     }
 
     if (showBonusJarDialog) {
-        Dialog(onDismissRequest = { showBonusJarDialog = false }) {
+        AnimatedGameDialog(
+            highGraphics = highGraphics,
+            onDismiss = { showBonusJarDialog = false }
+        ) { closeWithAction ->
             Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF1E293B), border = BorderStroke(2.dp, Color(0xFFF59E0B))) {
                 Column(modifier = Modifier.padding(22.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("🏺", fontSize = 42.sp)
@@ -2135,7 +2254,10 @@ fun GameplayScreen(
                         }
                     }
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { showBonusJarDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))) {
+                    Button(
+                        onClick = { soundEngine.playClick(); closeWithAction { showBonusJarDialog = false } },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))
+                    ) {
                         Text(if (lang == Lang.TR) "Tamam" else "Close", color = Color.Black, fontWeight = FontWeight.ExtraBold)
                     }
                 }
@@ -2145,7 +2267,11 @@ fun GameplayScreen(
 
     // SURE DOLUNCA ODULLU REKLAM VEYA ALTIN ILE +30 SANIYE
     if (isTimeOut) {
-        Dialog(onDismissRequest = {}) {
+        AnimatedGameDialog(
+            highGraphics = highGraphics,
+            canDismiss = false,
+            onDismiss = {}
+        ) { closeWithAction ->
             Surface(shape = RoundedCornerShape(22.dp), color = Color(0xFF1E293B), border = BorderStroke(2.dp, Color(0xFFEF4444))) {
                 Column(modifier = Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("⏰", fontSize = 44.sp)
@@ -2179,13 +2305,23 @@ fun GameplayScreen(
                             fontSize = 13
                         ) {
                             soundEngine.playClick()
-                            onUpdateEconomy(gold - 50, bonusJarCount, freeHammers)
-                            remainingSeconds = 30
-                            isTimeOut = false
+                            closeWithAction {
+                                onUpdateEconomy(gold - 50, bonusJarCount, freeHammers)
+                                remainingSeconds = 30
+                                isTimeOut = false
+                            }
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    TextButton(onClick = { isTimeOut = false; onBackToMenu() }) {
+                    TextButton(
+                        onClick = {
+                            soundEngine.playClick()
+                            closeWithAction {
+                                isTimeOut = false
+                                onBackToMenu()
+                            }
+                        }
+                    ) {
                         Text(if (lang == Lang.TR) "Ana Menüye Dön" else "Back to Menu", color = Color.White.copy(alpha = 0.7f))
                     }
                 }
@@ -2193,13 +2329,17 @@ fun GameplayScreen(
         }
     }
 
-    // BOLUM SONU EKRANI (ODULU 2'YE KATLAMA REKLAM BUTONU ILE)
+    // BOLUM SONU EKRANI (ODULU 2'YE KATLAMA REKLAM BUTONU + YAYLANAN PENCERE ANIMASYONU ILE)
     if (showWinDialog) {
         val monumentCompleteBonus = if (level % 10 == 0) 150 else 0
         val baseTotal = 30 + (if (puzzle.isTimeAttack) remainingSeconds * 2 else 0) + (if (puzzle.isBossLevel) 80 else 0) + monumentCompleteBonus
         val finalEarned = if (winRewardDoubled) baseTotal * 2 else baseTotal
 
-        Dialog(onDismissRequest = {}) {
+        AnimatedGameDialog(
+            highGraphics = highGraphics,
+            canDismiss = false,
+            onDismiss = {}
+        ) { closeWithAction ->
             Box(contentAlignment = Alignment.Center) {
                 ConfettiEffectOverlay()
                 Surface(shape = RoundedCornerShape(26.dp), color = Color(0xFF0F172A), border = BorderStroke(2.5.dp, Color(0xFFFBBF24)), shadowElevation = 16.dp) {
@@ -2262,8 +2402,10 @@ fun GameplayScreen(
 
                         MenuButton(if (lang == Lang.TR) "SEVİYE ${level + 1}'E GEÇ ➔" else "CONTINUE TO LEVEL ${level + 1} ➔", listOf(Color(0xFF10B981), Color(0xFF059669)), 48.dp, 15) {
                             soundEngine.playClick()
-                            showWinDialog = false
-                            onLevelCompleted(finalEarned)
+                            closeWithAction {
+                                showWinDialog = false
+                                onLevelCompleted(finalEarned)
+                            }
                         }
                     }
                 }
@@ -2279,6 +2421,7 @@ fun GameplayScreen(
 fun SpinWheelDialog(
     lang: Lang,
     spinsUsedToday: Int,
+    highGraphics: Boolean,
     soundEngine: ProceduralSoundEngine,
     adMobManager: AdMobManager,
     onPrizeWon: (Int, Int) -> Unit,
@@ -2325,7 +2468,11 @@ fun SpinWheelDialog(
         }
     }
 
-    Dialog(onDismissRequest = { if (!isSpinning) onDismiss() }) {
+    AnimatedGameDialog(
+        highGraphics = highGraphics,
+        canDismiss = !isSpinning,
+        onDismiss = onDismiss
+    ) { closeWithAction ->
         Surface(shape = RoundedCornerShape(26.dp), color = Color(0xFF0F172A), border = BorderStroke(2.dp, Color(0xFFFBBF24))) {
             Column(modifier = Modifier.padding(20.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(if (lang == Lang.TR) "🎡 GÜNLÜK ŞANS ÇARKI" else "🎡 DAILY SPIN WHEEL", color = Color(0xFFFBBF24), fontWeight = FontWeight.Black, fontSize = 20.sp)
@@ -2396,7 +2543,13 @@ fun SpinWheelDialog(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                TextButton(onClick = { if (!isSpinning) onDismiss() }) {
+                TextButton(
+                    onClick = {
+                        if (!isSpinning) {
+                            closeWithAction(onDismiss)
+                        }
+                    }
+                ) {
                     Text(if (lang == Lang.TR) "Kapat" else "Close", color = Color.White.copy(alpha = 0.7f))
                 }
             }
@@ -2405,11 +2558,20 @@ fun SpinWheelDialog(
 }
 
 @Composable
-fun MuseumBuilderDialog(lang: Lang, currentLevel: Int, worldTheme: WorldTheme, onDismiss: () -> Unit) {
+fun MuseumBuilderDialog(
+    lang: Lang,
+    currentLevel: Int,
+    highGraphics: Boolean,
+    worldTheme: WorldTheme,
+    onDismiss: () -> Unit
+) {
     val stepInZone = ((currentLevel - 1) % 10) + 1
     val percent = stepInZone * 10
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedGameDialog(
+        highGraphics = highGraphics,
+        onDismiss = onDismiss
+    ) { closeWithAction ->
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF0F172A), border = BorderStroke(2.dp, Color(0xFF8B5CF6)), modifier = Modifier.fillMaxHeight(0.84f)) {
             Column(modifier = Modifier.padding(18.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(if (lang == Lang.TR) "🏗️ MÜZEMİ İNŞA ET" else "🏗️ BUILD MY MUSEUM", color = Color(0xFFC4B5FD), fontWeight = FontWeight.Black, fontSize = 19.sp)
@@ -2460,7 +2622,11 @@ fun MuseumBuilderDialog(lang: Lang, currentLevel: Int, worldTheme: WorldTheme, o
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))) {
+                Button(
+                    onClick = { closeWithAction(onDismiss) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
+                ) {
                     Text(if (lang == Lang.TR) "Tamam" else "Close", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
@@ -2605,7 +2771,7 @@ fun WordSwipeWheel(
 }
 
 // ==========================================
-// 11. AYARLAR PENCERESI (GIZLILIK POLITIKASI LINKI ILE)
+// 11. AYARLAR PENCERESI (GIZLILIK POLITIKASI LINKI & ANIMASYON ILE)
 // ==========================================
 @Composable
 fun SettingsDialog(
@@ -2624,7 +2790,10 @@ fun SettingsDialog(
 ) {
     var showPolicy by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedGameDialog(
+        highGraphics = highGraphics,
+        onDismiss = onDismiss
+    ) { closeWithAction ->
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF1E293B), border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.25f))) {
             Column(modifier = Modifier.padding(22.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(if (lang == Lang.TR) "⚙️ OYUN AYARLARI" else "⚙️ GAME SETTINGS", color = Color.White, fontWeight = FontWeight.Black, fontSize = 19.sp)
@@ -2654,8 +2823,15 @@ fun SettingsDialog(
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = onResetProgress) { Text(if (lang == Lang.TR) "İlerlemeyi Sıfırla" else "Reset Save", color = Color(0xFFEF4444), fontSize = 13.sp) }
-                    Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))) {
+                    TextButton(
+                        onClick = { closeWithAction(onResetProgress) }
+                    ) {
+                        Text(if (lang == Lang.TR) "İlerlemeyi Sıfırla" else "Reset Save", color = Color(0xFFEF4444), fontSize = 13.sp)
+                    }
+                    Button(
+                        onClick = { closeWithAction(onDismiss) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) {
                         Text(if (lang == Lang.TR) "Tamam" else "Done", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -2664,7 +2840,12 @@ fun SettingsDialog(
     }
 
     if (showPolicy) {
-        PrivacyPolicyDialog(lang = lang, onContactEmail = onContactEmail, onDismiss = { showPolicy = false })
+        PrivacyPolicyDialog(
+            lang = lang,
+            highGraphics = highGraphics,
+            onContactEmail = onContactEmail,
+            onDismiss = { showPolicy = false }
+        )
     }
 }
 
@@ -2712,13 +2893,21 @@ private val PRIVACY_EN_SECTIONS: List<Pair<String, String>> = listOf(
 )
 
 @Composable
-fun PrivacyPolicyDialog(lang: Lang, onContactEmail: () -> Unit, onDismiss: () -> Unit) {
+fun PrivacyPolicyDialog(
+    lang: Lang,
+    highGraphics: Boolean,
+    onContactEmail: () -> Unit,
+    onDismiss: () -> Unit
+) {
     val title = if (lang == Lang.TR) PRIVACY_TR_TITLE else PRIVACY_EN_TITLE
     val updated = if (lang == Lang.TR) PRIVACY_TR_UPDATED else PRIVACY_EN_UPDATED
     val intro = if (lang == Lang.TR) PRIVACY_TR_INTRO else PRIVACY_EN_INTRO
     val sections = if (lang == Lang.TR) PRIVACY_TR_SECTIONS else PRIVACY_EN_SECTIONS
 
-    Dialog(onDismissRequest = onDismiss) {
+    AnimatedGameDialog(
+        highGraphics = highGraphics,
+        onDismiss = onDismiss
+    ) { closeWithAction ->
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = Color(0xFF0F172A),
@@ -2746,7 +2935,11 @@ fun PrivacyPolicyDialog(lang: Lang, onContactEmail: () -> Unit, onDismiss: () ->
                     Button(onClick = onContactEmail, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0EA5E9))) {
                         Text(if (lang == Lang.TR) "✉️ E-posta Gönder" else "✉️ Email Us", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    Button(onClick = onDismiss, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))) {
+                    Button(
+                        onClick = { closeWithAction(onDismiss) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) {
                         Text(if (lang == Lang.TR) "Kapat" else "Close", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
